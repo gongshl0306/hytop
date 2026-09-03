@@ -57,7 +57,7 @@ class MockBackend(HCUBackend):
         bdf = 0x05 + 0x10 * (index // 4)
         return DeviceInfo(
             index=index,
-            name=f"MOCK DCU-1 (seed {self._seed})",
+            name="MOCK DCU-1",
             pci_bus_id=f"0000:{bdf:02x}:00.{index % 4:x}",
             device_id=f"0x{0x6430 + index:x}",
             unique_id=str(1000 + index),

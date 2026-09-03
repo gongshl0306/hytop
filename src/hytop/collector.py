@@ -25,6 +25,24 @@ from hytop.host.process import attach_host_info
 from hytop.models.snapshot import SystemSnapshot
 
 
+def _restrict_processes(processes: list, indices: list[int]) -> list:
+    """Keep only device usages inside `indices`; drop now-empty processes.
+
+    Implements `-d 0,1` for the process table: a scheduler on HCU4 has no
+    rows when the user asked to watch HCU0/HCU1 only.
+    """
+    if not indices:
+        return processes
+    allowed = set(indices)
+    result = []
+    for proc in processes:
+        kept = {d: u for d, u in proc.devices.items() if d in allowed}
+        if kept:
+            proc.devices = kept
+            result.append(proc)
+    return result
+
+
 class Collector:
     def __init__(
         self,
@@ -159,6 +177,7 @@ class Collector:
             processes = self._last_good_processes
         else:
             self._last_good_processes = processes
+        processes = _restrict_processes(processes, self._indices)
         attach_host_info(processes, self._sampler, mem_total=self._mem_total,
                          proc_root=self._proc_root)
         return processes

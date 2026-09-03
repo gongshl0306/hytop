@@ -1,9 +1,10 @@
+import io
 import threading
 import time
 import unittest
 
 from hytop.backends.mock import MockBackend
-from hytop.collector import Collector
+from hytop.collector import Collector, _restrict_processes
 
 
 def wait_for(predicate, timeout=5.0, step=0.01):
@@ -13,6 +14,20 @@ def wait_for(predicate, timeout=5.0, step=0.01):
             return True
         time.sleep(step)
     return False
+
+
+class TestRestrictProcesses(unittest.TestCase):
+    def test_keeps_only_selected_devices_and_drops_empty(self):
+        procs = MockBackend().processes()  # 10001:{0,1}, 10002:{3}, 10003:{0,4,5}
+        kept = _restrict_processes(procs, [1])
+        # 10001 keeps device 1; 10002 (dev 3) and 10003 (0,4,5) have no rows left
+        self.assertEqual(len(kept), 1)
+        self.assertEqual(kept[0].pid, 10001)
+        self.assertEqual(set(kept[0].devices), {1})
+
+    def test_empty_indices_means_no_filter(self):
+        procs = MockBackend().processes()
+        self.assertEqual(_restrict_processes(procs, []), procs)
 
 
 class CollectorHarness(unittest.TestCase):

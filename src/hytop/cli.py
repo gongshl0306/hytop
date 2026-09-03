@@ -21,6 +21,7 @@ import hytop
 from hytop.backends.mock import MockBackend
 from hytop.backends.native import NativeBackend
 from hytop.ffi.errors import DriverNotFoundError, HytopError
+from hytop.collector import _restrict_processes as restrict_processes
 from hytop.host.proc import ProcessSampler, host_memory
 from hytop.host.process import attach_host_info
 from hytop.models.snapshot import SystemSnapshot
@@ -51,6 +52,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--once", action="store_true", help="print one snapshot and exit")
     parser.add_argument("--json", action="store_true", help="print one JSON snapshot and exit")
+    parser.add_argument(
+        "--frames", type=int, default=None, metavar="N",
+        help="headless TUI: render N refreshes, print the last frame, exit (testing)",
+    )
     parser.add_argument(
         "--backend", choices=("native", "mock"), default="native",
         help="data source: native driver or mock simulation (default: native)",
@@ -174,6 +179,7 @@ def run_once(backend, indices, window_ms, sampler, proc_root="/proc") -> SystemS
     except HytopError as err:
         processes = []
         errors.append(f"process list: {err}")
+    processes = restrict_processes(processes, indices)
     attach_host_info(processes, sampler, warmup_seconds=0.2, proc_root=proc_root)
     host_mem = host_memory(proc_root)
     memory_percent = None
@@ -228,11 +234,9 @@ def main(argv=None, backend_factory=make_backend, stdout=None, stderr=None) -> i
             print(render_once(snapshot), file=stdout)
             return EXIT_OK
 
-        print(
-            f"hytop {hytop.__version__}: TUI not implemented yet (planned T9); "
-            f"try --once",
-            file=stdout,
-        )
+        from hytop.tui.app import run_tui
+
+        run_tui(backend, indices, args.interval, args.window_ms, frames=args.frames)
         return EXIT_OK
     finally:
         try:
