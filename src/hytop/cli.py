@@ -1,8 +1,9 @@
 """hytop command line interface.
 
-    hytop                    live curses TUI (T9)
+    hytop                    live curses TUI
     hytop --once             one snapshot as plain text
-    hytop --json             one snapshot as JSON (T8)
+    hytop --json             one snapshot as JSON
+    hytop --frames N         headless TUI: render N frames, print the last
     hytop -d 0,1             restrict to devices 0 and 1
     hytop --backend mock     deterministic simulation without hardware
 

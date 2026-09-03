@@ -6,6 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "hytop"
 version = "0.1.0"
 description = "nvitop-like monitor for Hygon DCU (HCU) devices"
+readme = "README.md"
 requires-python = ">=3.8"
 license = { text = "MIT" }
 authors = [{ name = "hytop contributors" }]
@@ -19,6 +20,9 @@ classifiers = [
     "Topic :: System :: Monitoring",
 ]
 dependencies = []
+
+[project.scripts]
+hytop = "hytop.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

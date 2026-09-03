@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# hytop launcher: run from a checkout without installing (no third-party deps).
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+PYTHONPATH="$DIR/src${PYTHONPATH:+:$PYTHONPATH}" exec python3 -m hytop "$@"
