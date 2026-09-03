@@ -31,3 +31,15 @@ class MetricNotSupportedError(HytopError):
 
 class PermissionDeniedError(HytopError):
     """The current user lacks permission to query the HCU driver."""
+
+
+class RsmiCallError(HytopError):
+    """A driver call returned a non-success status.
+
+    Attributes:
+        code: raw ``rsmi_status_t`` value from the driver.
+    """
+
+    def __init__(self, code: int, message: str):
+        self.code = code
+        super().__init__(message)
