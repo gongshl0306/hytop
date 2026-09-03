@@ -173,6 +173,11 @@ class RsmiApi:
             [c_uint32, POINTER(RsmiProcessInfoV2)],
             c_int32,
         )
+        b(
+            "rsmi_compute_process_info_by_device_get",
+            [c_uint32, c_uint32, POINTER(RsmiProcessInfo)],
+            c_int32,
+        )
 
     def _bind(self, name: str, argtypes: list, restype) -> None:
         fn = getattr(self._lib, name)
@@ -342,6 +347,27 @@ class RsmiApi:
                 (int(info.gpuIndex[i]), float(info.gpuUsageRate[i]))
                 for i in range(min(used, len(info.gpuIndex)))
             ],
+        }
+
+    def process_info_by_device(self, pid: int, dv_ind: int) -> dict:
+        """Per-(pid, device) stats: vram/sdma bytes + cu occupancy percent.
+
+        Verified on the target: returns the device's real VRAM for the pid
+        (equals the v2 total when the pid uses a single device). A pid that
+        does NOT use the device also returns success with zeros, so callers
+        must only query devices listed in compute_process_info_v2()["gpus"].
+        """
+        info = RsmiProcessInfo()
+        self._call(
+            "rsmi_compute_process_info_by_device_get",
+            c_uint32(pid),
+            c_uint32(dv_ind),
+            byref(info),
+        )
+        return {
+            "vram_bytes": int(info.vram_usage),
+            "sdma_usage": int(info.sdma_usage),
+            "cu_occupancy": float(info.cu_occupancy),
         }
 
     def dev_proc_usage(self, pid: int, dv_ind: int) -> float:
