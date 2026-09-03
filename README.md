@@ -25,15 +25,18 @@ HCU  Model        Temp   Power   HCU%    CU%             VRAM   SCLK   MCLK
 `HYTOP_LIBRARY_PATH` 指定库目录）。**目标机无需 pip、无需安装任何依赖。**
 
 ```bash
-# 部署到 DCU 节点（默认 x8950_2）
-./scripts/deploy.sh x8950_2
+# 部署到 DCU 节点（默认 x8950_2），可选中安装到 /opt 并进 PATH
+./scripts/deploy.sh x8950_2 /opt/hytop
+ssh x8950_2 'ln -sfn /opt/hytop/bin/hytop /usr/local/bin/hytop'
 
-# 一次性快照 / JSON
+# 之后目标机上直接使用（任意用户、任意目录）
+hytop --once
+hytop --json
+ssh -t x8950_2 hytop        # 交互式 TUI
+
+# 或不安装、临时试用
+./scripts/deploy.sh x8950_2 /tmp/hytop
 ssh x8950_2 'PYTHONPATH=/tmp/hytop/src python3 -m hytop --once'
-ssh x8950_2 'PYTHONPATH=/tmp/hytop/src python3 -m hytop --json'
-
-# 交互式 TUI
-ssh -t x8950_2 'PYTHONPATH=/tmp/hytop/src python3 -m hytop'
 ```
 
 本机开发（无卡环境）：
