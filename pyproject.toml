@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hytop"
+version = "0.1.0"
+description = "nvitop-like monitor for Hygon DCU (HCU) devices"
+requires-python = ">=3.8"
+license = { text = "MIT" }
+authors = [{ name = "hytop contributors" }]
+keywords = ["hygon", "dcu", "hcu", "monitor", "tui", "nvitop"]
+classifiers = [
+    "Environment :: Console",
+    "Intended Audience :: System Administrators",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Topic :: System :: Monitoring",
+]
+dependencies = []
+
+[tool.setuptools.packages.find]
+where = ["src"]
