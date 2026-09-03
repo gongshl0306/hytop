@@ -97,10 +97,33 @@ class TestCliErrors(unittest.TestCase):
         self.assertEqual(code, 2)
         self.assertIn("--interval", err)
 
-    def test_json_stub_declined(self):
-        code, _, err = run_main(["--json", "--backend", "mock"])
-        self.assertEqual(code, 2)
-        self.assertIn("T8", err)
+    def test_json_schema(self):
+        import json as json_module
+
+        code, out, err = run_main(
+            ["--json", "--backend", "mock", "--window-ms", "10"]
+        )
+        self.assertEqual(code, 0)
+        payload = json_module.loads(out)
+        self.assertEqual(payload["hytop_version"], hytop.__version__)
+        self.assertIn("timestamp", payload)
+        self.assertEqual(len(payload["devices"]), 8)
+        dev = payload["devices"][0]
+        for key in (
+            "index", "name", "utilization", "cu_utilization", "memory_used",
+            "memory_total", "temperature", "power", "power_cap", "sclk_mhz",
+        ):
+            self.assertIn(key, dev)
+        self.assertEqual(sorted(dev["temperature"]), ["core", "edge", "junction", "memory"])
+        self.assertGreater(len(payload["processes"]), 0)
+        proc = payload["processes"][0]
+        for key in ("pid", "username", "command", "devices", "cpu_percent"):
+            self.assertIn(key, proc)
+        # JSON object keys must be strings
+        for dev_key in proc["devices"]:
+            self.assertIsInstance(dev_key, str)
+        self.assertIn("errors", payload)
+        self.assertIn("host", payload)
 
     def test_version(self):
         out = io.StringIO()

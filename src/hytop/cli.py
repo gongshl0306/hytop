@@ -12,8 +12,10 @@ Exit codes: 0 ok, 2 bad usage / driver missing, 3 other driver errors.
 from __future__ import annotations
 
 import argparse
+import json
 import socket
 import sys
+import time
 
 import hytop
 from hytop.backends.mock import MockBackend
@@ -21,6 +23,8 @@ from hytop.backends.native import NativeBackend
 from hytop.ffi.errors import DriverNotFoundError, HytopError
 from hytop.host.proc import ProcessSampler, host_memory
 from hytop.host.process import attach_host_info
+from hytop.models.snapshot import SystemSnapshot
+from hytop.report import snapshot_to_dict
 
 EXIT_OK = 0
 EXIT_USAGE = 2
@@ -95,10 +99,12 @@ def _fmt_mem_split(used, total):
     return f"{g(used)}/{g(total)}"
 
 
-def render_once(infos, metrics, processes, errors, host) -> str:
+def render_once(snapshot: SystemSnapshot) -> str:
     """Plain-text one-shot table (the numbers the TUI must agree with)."""
     lines = []
     hostname = socket.gethostname()
+    metrics = snapshot.devices
+    errors = snapshot.errors
     lines.append(
         f"hytop {hytop.__version__}  host: {hostname}  "
         f"devices: {len(metrics)}{f'  errors: {len(errors)}' if errors else ''}"
@@ -110,7 +116,7 @@ def render_once(infos, metrics, processes, errors, host) -> str:
     lines.append(header)
     for index in sorted(metrics):
         m = metrics[index]
-        info = infos.get(index)
+        info = snapshot.device_info.get(index)
         name = (info.name if info and info.name else "?").replace("HYGON ", "")
         lines.append(
             f"{index:>3}  {name:<12} {_fmt(m.temperature.edge, 'C', precision=1):>6} "
@@ -118,6 +124,7 @@ def render_once(infos, metrics, processes, errors, host) -> str:
             f"{_fmt(m.cu_utilization, '%'):>6} {_fmt_mem_split(m.memory_used, m.memory_total):>16} "
             f"{_fmt(m.sclk_mhz, 'M', precision=0):>6} {_fmt(m.mclk_mhz, 'M', precision=0):>6}"
         )
+    processes = snapshot.processes
     if processes:
         lines.append("")
         lines.append(
@@ -136,11 +143,11 @@ def render_once(infos, metrics, processes, errors, host) -> str:
                     f"{proc.pid:>7}  {(proc.username or '?'):<8} {dev_index:>3} {vram:>9} "
                     f"{cu:>5} {cpu:>6} {mem:>5}  {command}"
                 )
-    if host and host.get("cpu_percent") is not None:
+    if snapshot.cpu_percent is not None:
         lines.append("")
         lines.append(
-            f"host: cpu {_fmt(host['cpu_percent'], '%')}  "
-            f"mem {_fmt(host.get('memory_percent'), '%')}"
+            f"host: cpu {_fmt(snapshot.cpu_percent, '%')}  "
+            f"mem {_fmt(snapshot.memory_percent, '%')}"
         )
     if errors:
         lines.append("")
@@ -149,8 +156,8 @@ def render_once(infos, metrics, processes, errors, host) -> str:
     return "\n".join(lines)
 
 
-def run_once(backend, indices, window_ms, sampler, proc_root="/proc"):
-    """Collect everything for one snapshot; returns render_once arguments."""
+def run_once(backend, indices, window_ms, sampler, proc_root="/proc") -> SystemSnapshot:
+    """Collect everything for a one-shot SystemSnapshot."""
     infos = {i: backend.device_info(i) for i in indices}
     metrics = {i: backend.device_metrics(i) for i in indices}
     errors = []
@@ -173,11 +180,15 @@ def run_once(backend, indices, window_ms, sampler, proc_root="/proc"):
     if host_mem:
         total, available = host_mem
         memory_percent = (total - available) / total * 100.0
-    host = {
-        "cpu_percent": sampler.host_cpu_percent(),
-        "memory_percent": memory_percent,
-    }
-    return infos, metrics, processes, errors, host
+    return SystemSnapshot(
+        timestamp=time.time(),
+        device_info=infos,
+        devices=metrics,
+        processes=processes,
+        cpu_percent=sampler.host_cpu_percent(),
+        memory_percent=memory_percent,
+        errors=errors,
+    )
 
 
 def main(argv=None, backend_factory=make_backend, stdout=None, stderr=None) -> int:
@@ -210,13 +221,11 @@ def main(argv=None, backend_factory=make_backend, stdout=None, stderr=None) -> i
 
         if args.once or args.json:
             sampler = ProcessSampler(root="/proc")
-            infos, metrics, processes, errors, host = run_once(
-                backend, indices, args.window_ms, sampler
-            )
+            snapshot = run_once(backend, indices, args.window_ms, sampler)
             if args.json:
-                print("hytop: --json arrives in T8", file=stderr)
-                return EXIT_USAGE
-            print(render_once(infos, metrics, processes, errors, host), file=stdout)
+                print(json.dumps(snapshot_to_dict(snapshot)), file=stdout)
+                return EXIT_OK
+            print(render_once(snapshot), file=stdout)
             return EXIT_OK
 
         print(

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from hytop.models.device import DeviceMetrics
+from hytop.models.device import DeviceInfo, DeviceMetrics
 from hytop.models.process import HcuProcessInfo
 
 
@@ -17,6 +17,10 @@ from hytop.models.process import HcuProcessInfo
 class SystemSnapshot:
     timestamp: float
 
+    # static identity per device, read once at startup
+    device_info: dict[int, DeviceInfo] = field(default_factory=dict)
+
+    # live metrics per device
     devices: dict[int, DeviceMetrics] = field(default_factory=dict)
 
     processes: list[HcuProcessInfo] = field(default_factory=list)
