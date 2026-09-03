@@ -1,7 +1,5 @@
 import os
 import pwd
-import shutil
-import tempfile
 import unittest
 
 from hytop.host.proc import (
@@ -19,59 +17,29 @@ from hytop.host.proc import (
     sample_process,
     username_for_uid,
 )
-
-
-def stat_line(pid, comm, state="S", utime=0, stime=0, rss_pages=100, nthreads=1):
-    # after "pid (comm) ", rest[0]=field3(state), rest[11]=utime(f14),
-    # rest[12]=stime(f15), rest[17]=num_threads(f20), rest[21]=rss(f24)
-    rest = ["0"] * 50
-    rest[0] = state
-    rest[11] = str(utime)
-    rest[12] = str(stime)
-    rest[17] = str(nthreads)
-    rest[21] = str(rss_pages)
-    return f"{pid} ({comm}) " + " ".join(rest)
+from tests.proc_fixture import ProcTree, stat_line
 
 
 class FakeProc(unittest.TestCase):
     """Builds a fixture procfs tree under a temp dir."""
 
     def setUp(self):
-        self.root = tempfile.mkdtemp(prefix="hytop-fake-proc-")
-        self.addCleanup(shutil.rmtree, self.root, ignore_errors=True)
+        self.tree = ProcTree()
+        self.addCleanup(lambda: None)  # ProcTree cleans itself on exit
+        self.root = self.tree.root
         self.now = [1000.0]
 
-    def make_process(self, pid, comm="python3", cmdline=("python3", "train.py"),
-                     utime=10, stime=5, rss_pages=1000, state="S"):
-        d = os.path.join(self.root, str(pid))
-        os.makedirs(d)
-        with open(os.path.join(d, "stat"), "w") as f:
-            f.write(stat_line(pid, comm, state=state, utime=utime, stime=stime, rss_pages=rss_pages))
-        if cmdline is not None:
-            raw = b"\0".join(part.encode() for part in cmdline) + b"\0"
-            with open(os.path.join(d, "cmdline"), "wb") as f:
-                f.write(raw)
-        else:  # kernel thread: empty cmdline file
-            with open(os.path.join(d, "cmdline"), "wb") as f:
-                f.write(b"")
+    def make_process(self, pid, **kwargs):
+        self.tree.make_process(pid, **kwargs)
 
     def rewrite_stat(self, pid, **kwargs):
-        d = os.path.join(self.root, str(pid))
-        comm = kwargs.pop("comm", "python3")
-        with open(os.path.join(d, "stat"), "w") as f:
-            f.write(stat_line(pid, comm, **kwargs))
+        self.tree.rewrite_stat(pid, **kwargs)
 
     def write_proc_stat(self, total_ticks):
-        with open(os.path.join(self.root, "stat"), "w") as f:
-            f.write(f"cpu  {total_ticks} 0 0 0 0 0 0 0 0 0\n")
-            f.write("cpu0 500 0 0 0 0 0 0 0 0 0\n")
+        self.tree.write_proc_stat(total_ticks)
 
-    def write_meminfo(self, total_kib=1_000_000, avail_kib=250_000):
-        with open(os.path.join(self.root, "meminfo"), "w") as f:
-            f.write(f"MemTotal:       {total_kib} kB\n")
-            f.write(f"MemFree:        {avail_kib // 2} kB\n")
-            f.write(f"MemAvailable:   {avail_kib} kB\n")
-            f.write("SwapTotal:      0 kB\n")
+    def write_meminfo(self, **kwargs):
+        self.tree.write_meminfo(**kwargs)
 
 
 class TestParseStatLine(FakeProc):
@@ -160,11 +128,31 @@ class TestCpuMath(unittest.TestCase):
         )
 
     def test_host_percent(self):
-        # 200 ticks over 2s: 100% of one core-equivalent of total capacity
+        # 200 ticks over 2s on a single core: 100% of one core-equivalent
         expected = 200 / (2.0 * CLK_TCK) * 100
         self.assertAlmostEqual(host_cpu_percent(1000, 1200, 2.0), expected)
         self.assertIsNone(host_cpu_percent(None, 10, 1.0))
         self.assertIsNone(host_cpu_percent(0, 10, 0.0))
+
+    def test_host_percent_normalized_by_cores(self):
+        # 200 ticks over 2s across 4 cores: quarter of one core each
+        expected = 200 / (2.0 * CLK_TCK * 4) * 100
+        self.assertAlmostEqual(host_cpu_percent(1000, 1200, 2.0, ncores=4), expected)
+        self.assertIsNone(host_cpu_percent(1000, 1200, 2.0, ncores=0))  # invalid
+
+
+class TestCoreCount(FakeProc):
+    def test_from_stat_fixture(self):
+        from hytop.host.proc import core_count
+
+        self.write_proc_stat(1000)  # one "cpu " aggregate + one "cpu0" line
+        self.assertEqual(core_count(self.root), 1)
+
+    def test_missing_stat_falls_back(self):
+        from hytop.host.proc import core_count
+        import os as _os
+
+        self.assertEqual(core_count(self.root), _os.cpu_count() or 1)
 
 
 class TestProcessSampler(FakeProc):
@@ -199,7 +187,7 @@ class TestProcessSampler(FakeProc):
         self.make_process(101)
         s = self.sampler()
         s.refresh([100, 101])
-        shutil.rmtree(os.path.join(self.root, "101"))
+        self.tree.remove_process(101)
         s.refresh([100, 101])
         self.assertIn(100, s._prev)
         self.assertNotIn(101, s._prev)

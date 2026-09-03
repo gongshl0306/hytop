@@ -152,15 +152,33 @@ def proc_cpu_percent(prev: ProcSample | None, now: ProcSample | None) -> float |
     return max(0.0, (now.cpu_ticks - prev.cpu_ticks) / (wall * CLK_TCK) * 100.0)
 
 
+def core_count(root: str) -> int:
+    """Number of logical CPUs from /proc/stat 'cpuN' lines (container-safe)."""
+    count = 0
+    try:
+        with open(os.path.join(root, "stat")) as f:
+            for line in f:
+                if line.startswith("cpu") and line[3:4].isdigit():
+                    count += 1
+    except OSError:
+        pass
+    return count or os.cpu_count() or 1
+
+
 def host_cpu_percent(
     prev_total: int | None,
     now_total: int | None,
     wall_seconds: float,
+    ncores: int = 1,
 ) -> float | None:
-    """Whole-system CPU% across all cores (<= 100)."""
-    if prev_total is None or now_total is None or wall_seconds <= 0:
+    """Whole-system CPU% normalized to total capacity (0 ~ 100).
+
+    /proc/stat aggregates ticks across all cores, so the delta is divided
+    by ncores; unlike process CPU%, this never exceeds 100.
+    """
+    if prev_total is None or now_total is None or wall_seconds <= 0 or ncores <= 0:
         return None
-    return max(0.0, (now_total - prev_total) / (wall_seconds * CLK_TCK) * 100.0)
+    return max(0.0, (now_total - prev_total) / (wall_seconds * CLK_TCK * ncores) * 100.0)
 
 
 class ProcessSampler:
@@ -170,9 +188,10 @@ class ProcessSampler:
     refresh on; processes that vanished are dropped silently.
     """
 
-    def __init__(self, root: str = "/proc", clock=time.monotonic):
+    def __init__(self, root: str = "/proc", clock=time.monotonic, ncores: int | None = None):
         self.root = root
         self._clock = clock
+        self._ncores = ncores
         self._prev: dict[int, ProcSample] = {}
         self._prev_cpu_pct: dict[int, float | None] = {}
         self._prev_host_total: int | None = None
@@ -182,6 +201,8 @@ class ProcessSampler:
     def refresh(self, pids: list[int]) -> dict[int, ProcSample]:
         now = self._clock()
         host_total = cpu_total_ticks(self.root)
+        if self._ncores is None:
+            self._ncores = core_count(self.root)
         samples: dict[int, ProcSample] = {}
         for pid in pids:
             sample = sample_process(self.root, pid, now)
@@ -194,7 +215,7 @@ class ProcessSampler:
         }
         if self._prev_wall is not None and self._prev_host_total is not None:
             self._prev_host_pct = host_cpu_percent(
-                self._prev_host_total, host_total, now - self._prev_wall
+                self._prev_host_total, host_total, now - self._prev_wall, self._ncores or 1
             )
         else:
             self._prev_host_pct = None
