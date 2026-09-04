@@ -24,9 +24,17 @@ from hytop.tui.formatter import (
 
 SORT_KEYS = ("pid", "vram", "cu", "cpu")
 
+BLOCKS = "▁▂▃▄▅▆▇█"
+BAR_FULL = "█"
+BAR_EMPTY = "░"
+
+UTIL_BAR_WIDTH = 11
+MEM_BAR_WIDTH = 10
+
 DEVICE_HEADER = (
-    f"{'HCU':>3}  {'Model':<10} {'Temp':>6} {'Power':>6} {'HCU%':>6} "
-    f"{'CU%':>6} {'VRAM':>13} {'SCLK':>6} {'MCLK':>6}"
+    f"{'HCU':>3}  {'Model':<10} {'Temp':>6} {'Power':>6} "
+    f"{'HCU%':>{UTIL_BAR_WIDTH + 8}} {'CU%':>6} "
+    f"{'VRAM':>{MEM_BAR_WIDTH + 14}} {'SCLK':>6} {'MCLK':>6}"
 )
 PROCESS_HEADER = (
     f"{'PID':>7}  {'USER':<8} {'HCU':>3} {'VRAM':>7} {'CU%':>5} "
@@ -89,15 +97,75 @@ def short_model(name: str | None) -> str:
     return name[:10]
 
 
+def bar(value: float | None, width: int = UTIL_BAR_WIDTH,
+        maximum: float = 100.0) -> str:
+    """`[██████░░░░]` utilization bar; dots when the value is unknown."""
+    if value is None:
+        return f"[{BAR_EMPTY * width}]"
+    if maximum <= 0:
+        maximum = 100.0
+    fraction = min(1.0, max(0.0, value / maximum))
+    filled = int(round(fraction * width))
+    return f"[{BAR_FULL * filled}{BAR_EMPTY * (width - filled)}]"
+
+
+def sparkline(values, width: int = 40) -> str:
+    """Values as a block-character trend line; None/gaps render lowest."""
+    if width <= 0:
+        return ""
+    sampled = list(values) if len(values) <= width else _downsample(values, width)
+    out = []
+    for v in sampled:
+        if v is None or v < 0:
+            level = 0
+        else:
+            level = min(len(BLOCKS) - 1, int(v / 100.0 * len(BLOCKS)))
+        out.append(BLOCKS[level])
+    return "".join(out)
+
+
+def _downsample(values, width: int) -> list:
+    bucket_size = len(values) / width
+    sampled = []
+    for i in range(width):
+        start = int(i * bucket_size)
+        end = max(start + 1, int((i + 1) * bucket_size))
+        bucket = [v for v in values[start:end] if v is not None and v >= 0]
+        sampled.append(sum(bucket) / len(bucket) if bucket else None)
+    return sampled
+
+
+def history_lines(snapshot, spark_width: int = 40, per_line: int = 2) -> list[str]:
+    """One trend line per device, `per_line` devices per row."""
+    devices = sorted(snapshot.history)
+    if not devices:
+        return []
+    label_width = len(f"HCU{max(devices)}:")
+    lines = []
+    for start in range(0, len(devices), per_line):
+        cells = []
+        for index in devices[start:start + per_line]:
+            series = snapshot.history[index].utilization.values()
+            cells.append(f"{f'HCU{index}:':<{label_width}} {sparkline(series, spark_width)}")
+        lines.append("  ".join(cells))
+    return lines
+
+
 def device_lines(snapshot) -> list[str]:
     lines = [DEVICE_HEADER]
     for index in sorted(snapshot.devices):
         m = snapshot.devices[index]
+        info = snapshot.device_info.get(index)
+        model = short_model(info.name if info else None)
+        util_cell = f"{bar(m.utilization)} {fmt_percent(m.utilization)}"
+        mem_fraction = None
+        if m.memory_used is not None and m.memory_total:
+            mem_fraction = m.memory_used / m.memory_total * 100.0
+        mem_cell = f"{bar(mem_fraction, MEM_BAR_WIDTH)} {fmt_mem_pair(m.memory_used, m.memory_total)}"
         lines.append(
-            f"{index:>3}  {short_model(snapshot.device_info.get(index).name if snapshot.device_info.get(index) else None):<10} "
-            f"{fmt_temp(m.temperature.edge):>6} {fmt_power(m.power):>6} "
-            f"{fmt_percent(m.utilization):>6} {fmt_percent(m.cu_utilization):>6} "
-            f"{fmt_mem_pair(m.memory_used, m.memory_total):>13} "
+            f"{index:>3}  {model:<10} {fmt_temp(m.temperature.edge):>6} {fmt_power(m.power):>6} "
+            f"{util_cell:>19} {fmt_percent(m.cu_utilization):>6} "
+            f"{mem_cell:>24} "
             f"{fmt_clock(m.sclk_mhz):>6} {fmt_clock(m.mclk_mhz):>6}"
         )
     return lines
@@ -160,6 +228,9 @@ def render_frame(snapshot, state: TuiState, width: int = 120) -> list[str]:
     lines.append("")
     lines.extend(device_lines(snapshot))
     lines.append("")
+    lines.extend(history_lines(snapshot))
+    if lines[-1] != "":
+        lines.append("")
     lines.extend(process_lines(snapshot, state, width=width))
     lines.append("")
     if errors:

@@ -1,9 +1,19 @@
 import unittest
 
 from hytop.models.device import DeviceInfo, DeviceMetrics, TemperatureInfo
+from hytop.models.history import DeviceHistory
 from hytop.models.process import HcuProcessInfo, ProcessDeviceUsage
 from hytop.models.snapshot import SystemSnapshot
-from hytop.tui.panels import TuiState, device_lines, handle_key, process_lines, render_frame
+from hytop.tui.panels import (
+    TuiState,
+    bar,
+    device_lines,
+    handle_key,
+    history_lines,
+    process_lines,
+    render_frame,
+    sparkline,
+)
 
 GIB = 1024**3
 
@@ -43,6 +53,53 @@ def make_snapshot():
         ),
     ]
     return snapshot
+
+
+class TestBarsAndSparklines(unittest.TestCase):
+    def test_bar_levels(self):
+        self.assertEqual(bar(None), "[" + "░" * 11 + "]")
+        self.assertEqual(bar(0), "[" + "░" * 11 + "]")
+        self.assertEqual(bar(100), "[" + "█" * 11 + "]")
+        self.assertEqual(bar(50), "[" + "█" * 6 + "░" * 5 + "]")  # round(5.5)=6
+        self.assertEqual(bar(200), "[" + "█" * 11 + "]")  # clamped
+        self.assertEqual(bar(-5), "[" + "░" * 11 + "]")
+
+    def test_bar_custom_width_and_maximum(self):
+        self.assertEqual(bar(500, width=4, maximum=1000), "[" + "██" + "░░" + "]")
+
+    def test_sparkline_levels(self):
+        out = sparkline([0, 12.5, 100], 3)
+        self.assertEqual(out, "▁▂█")  # 12.5% -> level 1 of 8
+
+    def test_sparkline_none_is_lowest(self):
+        self.assertEqual(sparkline([None, 100], 2), "▁█")
+
+    def test_sparkline_downsamples_long_series(self):
+        out = sparkline([100] * 80, 40)
+        self.assertEqual(len(out), 40)
+        self.assertEqual(out, "█" * 40)
+
+    def test_sparkline_empty(self):
+        self.assertEqual(sparkline([], 10), "")
+
+
+class TestHistoryLines(unittest.TestCase):
+    def test_history_lines_rendered_two_per_row(self):
+        snapshot = make_snapshot()
+        for index in (0, 1, 2):
+            hist = DeviceHistory()
+            for v in (10, 50, 90):
+                hist.append(v, v, 100, 100.0)
+            snapshot.history[index] = hist
+        lines = history_lines(snapshot, spark_width=10)
+        self.assertEqual(len(lines), 2)  # 3 devices -> 2 rows
+        self.assertIn("HCU0:", lines[0])
+        self.assertIn("HCU1:", lines[0])
+        self.assertIn("HCU2:", lines[1])
+        self.assertIn("█", lines[0])  # rising trend ends high
+
+    def test_history_section_empty_without_history(self):
+        self.assertEqual(history_lines(make_snapshot()), [])
 
 
 class TestDeviceLines(unittest.TestCase):

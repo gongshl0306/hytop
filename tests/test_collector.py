@@ -86,6 +86,22 @@ class TestCollectorData(CollectorHarness):
         self.assertIn("MOCK", snapshot.device_info[0].name)
         collector.stop()
 
+    def test_history_grows_and_is_snapshotted_per_tick(self):
+        _, collector = self.make_collector()
+        collector.start()
+        self.assertTrue(wait_for(
+            lambda: collector.snapshot() is not None
+            and len(collector.snapshot().history.get(0).utilization) >= 2,
+            timeout=10,
+        ))
+        first = collector.snapshot()
+        hist_copy = first.history[0]
+        # history in the snapshot is a copy: later appends don't leak in
+        time.sleep(0.12)
+        later = collector.snapshot()
+        self.assertGreater(len(later.history[0].utilization), len(hist_copy.utilization))
+        collector.stop()
+
     def test_rotation_covers_all_devices(self):
         backend, collector = self.make_collector(window_devices_per_tick=2)
         collector.start()
