@@ -162,6 +162,14 @@ class NativeBackend(HCUBackend):
             usage.cu_occupancy = info["cu_occupancy"]
         else:
             usage.cu_occupancy = v2_rate
+        # rsmi_dev_proc_usage_get is the preferred per-process CU source:
+        # verified under load it returns live float percentages while the
+        # by_device cu_occupancy stays integer-quantized and laggy and the
+        # v2 rate runs coarse.
+        try:
+            usage.cu_occupancy = api.dev_proc_usage(pid, dev_index)
+        except RsmiCallError:
+            pass
         return usage
 
     def process_info(self, pid: int, device_index: int) -> ProcessDeviceUsage | None:

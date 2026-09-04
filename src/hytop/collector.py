@@ -48,9 +48,9 @@ class Collector:
         self,
         backend,
         interval: float = 1.0,
-        window_ms: int = 200,
+        window_ms: int = 150,
         devices: list[int] | None = None,
-        window_devices_per_tick: int = 2,
+        window_devices_per_tick: int = 3,
         proc_root: str = "/proc",
         clock=time.monotonic,
     ):

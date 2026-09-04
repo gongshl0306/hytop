@@ -115,6 +115,10 @@ class FakeRsmi:
         return {"vram_bytes": 144912814080 if d == 1 else 72000000000,
                 "sdma_usage": 42, "cu_occupancy": 12.5}
 
+    def dev_proc_usage(self, pid, d):
+        self._ok("proc_usage")
+        return 45.5
+
 
 def make_backend(**kwargs):
     fake = FakeRsmi(**kwargs)
@@ -224,11 +228,18 @@ class TestProcesses(unittest.TestCase):
         self.assertEqual(set(single.devices), {1})
         self.assertEqual(single.devices[1].vram_used, 144912814080)
         self.assertEqual(single.devices[1].sdma_usage, 42)
-        self.assertEqual(single.devices[1].cu_occupancy, 12.5)
+        # CU% prefers the float proc_usage over the integer by_device value
+        self.assertEqual(single.devices[1].cu_occupancy, 45.5)
         multi = procs[1]
         self.assertEqual(set(multi.devices), {0, 3})
         self.assertEqual(multi.devices[0].vram_used, 72000000000)
         self.assertEqual(multi.devices[3].vram_used, 72000000000)
+
+    def test_proc_usage_failure_falls_back_to_by_device_cu(self):
+        self.fake.fail.add("proc_usage")
+        procs = self.backend.processes()
+        single = procs[0]
+        self.assertEqual(single.devices[1].cu_occupancy, 12.5)  # by_device value
 
     def test_v2_failure_keeps_pid_with_empty_devices(self):
         self.fake.fail.add("proc_v2")
@@ -237,13 +248,18 @@ class TestProcesses(unittest.TestCase):
         self.assertEqual(procs[0].devices, {})
         self.assertEqual(procs[0].pid, 69132)
 
-    def test_by_device_failure_falls_back_to_v2_rate(self):
+    def test_by_device_failure_falls_back_through_the_chain(self):
         self.fake.fail.add("proc_by_dev3")
         procs = self.backend.processes()
         multi = procs[1]
         self.assertIsNone(multi.devices[3].vram_used)
-        self.assertEqual(multi.devices[3].cu_occupancy, 60.0)  # v2 rate
+        self.assertEqual(multi.devices[3].cu_occupancy, 45.5)  # proc_usage still works
         self.assertEqual(multi.devices[0].vram_used, 72000000000)  # unaffected
+
+    def test_full_cu_chain_failure_uses_v2_rate(self):
+        self.fake.fail |= {"proc_by_dev3", "proc_usage"}
+        procs = self.backend.processes()
+        self.assertEqual(procs[1].devices[3].cu_occupancy, 60.0)  # v2 rate
 
     def test_pids_enumeration_failure_propagates(self):
         self.fake.fail.add("proc_pids")

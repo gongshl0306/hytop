@@ -48,8 +48,8 @@ def build_parser() -> argparse.ArgumentParser:
         help="refresh interval in seconds (default: 1.0)",
     )
     parser.add_argument(
-        "--window-ms", type=int, default=200, metavar="MS",
-        help="sampling window for HCU%%/CU%% per device (default: 200)",
+        "--window-ms", type=int, default=150, metavar="MS",
+        help="sampling window for HCU%%/CU%% per device (default: 150)",
     )
     parser.add_argument("--once", action="store_true", help="print one snapshot and exit")
     parser.add_argument("--json", action="store_true", help="print one JSON snapshot and exit")
