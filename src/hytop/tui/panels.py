@@ -1,14 +1,14 @@
-"""Frame rendering as plain line lists — no curses here, fully testable.
+"""Frame rendering for the TUI — pure functions, no curses here.
 
-``render_frame`` produces every line of one screen; app.py only positions
-them. Process rows are one row per (PID, device) pair, sorted per TuiState.
+A frame is a list of lines; each line is a list of ``(text, style)``
+segments so colors can attach to individual cells (theme.py decides the
+style, app.py maps it to curses attributes).
 """
 
 from __future__ import annotations
 
-import curses
 import socket
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 import hytop
 from hytop.tui.formatter import (
@@ -21,6 +21,10 @@ from hytop.tui.formatter import (
     fmt_temp,
     truncate,
 )
+from hytop.tui.theme import power_style, temp_style, util_style
+
+Segment = tuple[str, str | None]
+Line = list[Segment]
 
 SORT_KEYS = ("pid", "vram", "cu", "cpu")
 
@@ -47,12 +51,26 @@ HELP_LINE = (
 )
 
 
+@dataclass
+class TuiState:
+    process_sort: str = "pid"
+    filter_devices: set | None = None
+    selected: int = 0
+
+
+def text_of(line: Line) -> str:
+    """Plain text of a line (headless printing, tests)."""
+    return "".join(text for text, _ in line)
+
+
 def handle_key(state: TuiState, key: int, device_count: int) -> str | None:
     """Key state machine; returns 'quit' or None after mutating state.
 
     Sort keys pick the process-table sort. Digits toggle devices in/out of
     the process filter (None = show all); 'a' clears the filter.
     """
+    import curses
+
     if key in (ord("q"), 27):  # q or ESC
         return "quit"
     if key == ord("p"):
@@ -79,13 +97,6 @@ def handle_key(state: TuiState, key: int, device_count: int) -> str | None:
     elif key == curses.KEY_DOWN:
         state.selected += 1  # clamped against row count at render time
     return None
-
-
-@dataclass
-class TuiState:
-    process_sort: str = "pid"
-    filter_devices: set | None = None
-    selected: int = 0
 
 
 def short_model(name: str | None) -> str:
@@ -135,7 +146,7 @@ def _downsample(values, width: int) -> list:
     return sampled
 
 
-def history_lines(snapshot, spark_width: int = 40, per_line: int = 2) -> list[str]:
+def history_lines(snapshot, spark_width: int = 40, per_line: int = 2) -> list[Line]:
     """One trend line per device, `per_line` devices per row."""
     devices = sorted(snapshot.history)
     if not devices:
@@ -143,16 +154,27 @@ def history_lines(snapshot, spark_width: int = 40, per_line: int = 2) -> list[st
     label_width = len(f"HCU{max(devices)}:")
     lines = []
     for start in range(0, len(devices), per_line):
-        cells = []
+        cells: list[Segment] = []
         for index in devices[start:start + per_line]:
             series = snapshot.history[index].utilization.values()
-            cells.append(f"{f'HCU{index}:':<{label_width}} {sparkline(series, spark_width)}")
-        lines.append("  ".join(cells))
+            cells.append(
+                (f"{f'HCU{index}:':<{label_width}} {sparkline(series, spark_width)}", None)
+            )
+        lines.append(_join_cells(cells))
     return lines
 
 
-def device_lines(snapshot) -> list[str]:
-    lines = [DEVICE_HEADER]
+def _join_cells(cells: list[Segment]) -> Line:
+    line: Line = []
+    for i, (text, style) in enumerate(cells):
+        if i:
+            line.append(("  ", None))
+        line.append((text, style))
+    return line
+
+
+def device_lines(snapshot) -> list[Line]:
+    lines: list[Line] = [[(DEVICE_HEADER, "bold")]]
     for index in sorted(snapshot.devices):
         m = snapshot.devices[index]
         info = snapshot.device_info.get(index)
@@ -162,12 +184,24 @@ def device_lines(snapshot) -> list[str]:
         if m.memory_used is not None and m.memory_total:
             mem_fraction = m.memory_used / m.memory_total * 100.0
         mem_cell = f"{bar(mem_fraction, MEM_BAR_WIDTH)} {fmt_mem_pair(m.memory_used, m.memory_total)}"
-        lines.append(
-            f"{index:>3}  {model:<10} {fmt_temp(m.temperature.edge):>6} {fmt_power(m.power):>6} "
-            f"{util_cell:>19} {fmt_percent(m.cu_utilization):>6} "
-            f"{mem_cell:>24} "
-            f"{fmt_clock(m.sclk_mhz):>6} {fmt_clock(m.mclk_mhz):>6}"
-        )
+        temp = m.temperature.edge
+        line: Line = [
+            (f"{index:>3}  {model:<10} ", None),
+            (f"{fmt_temp(temp):>6}", temp_style(temp)),
+            (" ", None),
+            (f"{fmt_power(m.power):>6}", power_style(m.power, m.power_cap)),
+            (" ", None),
+            (f"{util_cell:>19}", util_style(m.utilization)),
+            (" ", None),
+            (f"{fmt_percent(m.cu_utilization):>6}", None),
+            (" ", None),
+            (f"{mem_cell:>24}", None),
+            (" ", None),
+            (f"{fmt_clock(m.sclk_mhz):>6}", None),
+            (" ", None),
+            (f"{fmt_clock(m.mclk_mhz):>6}", None),
+        ]
+        lines.append(line)
     return lines
 
 
@@ -192,11 +226,11 @@ def _sort_processes(snapshot, state: TuiState):
     return rows
 
 
-def process_lines(snapshot, state: TuiState, width: int = 120) -> list[str]:
+def process_lines(snapshot, state: TuiState, width: int = 120) -> list[Line]:
     rows = _sort_processes(snapshot, state)
     if not rows:
-        return [PROCESS_HEADER, "  (no HCU processes)"]
-    lines = [PROCESS_HEADER]
+        return [[(PROCESS_HEADER, "bold")], [("  (no HCU processes)", None)]]
+    lines: list[Line] = [[(PROCESS_HEADER, "bold")]]
     for position, (proc, dev_index, usage) in enumerate(rows):
         marker = ">" if position == state.selected else " "
         vram = fmt_bytes(usage.vram_used)
@@ -204,14 +238,16 @@ def process_lines(snapshot, state: TuiState, width: int = 120) -> list[str]:
         cpu = NA if proc.cpu_percent is None else f"{proc.cpu_percent:.1f}"
         mem = NA if proc.host_memory_percent is None else f"{proc.host_memory_percent:.1f}"
         command = truncate(proc.command or proc.name, max(8, width - 50))
-        lines.append(
+        style = "bold" if position == state.selected else None
+        lines.append([(
             f"{marker}{proc.pid:>7}  {(proc.username or NA)[:8]:<8} {dev_index:>3} "
-            f"{vram:>7} {cu:>5} {cpu:>6} {mem:>5}  {command}"
-        )
+            f"{vram:>7} {cu:>5} {cpu:>6} {mem:>5}  {command}",
+            style,
+        )])
     return lines
 
 
-def render_frame(snapshot, state: TuiState, width: int = 120) -> list[str]:
+def render_frame(snapshot, state: TuiState, width: int = 120) -> list[Line]:
     errors = snapshot.errors
     title = (
         f"hytop {hytop.__version__}  host: {socket.gethostname()}  "
@@ -224,16 +260,16 @@ def render_frame(snapshot, state: TuiState, width: int = 120) -> list[str]:
             f"host cpu {fmt_percent(snapshot.cpu_percent)}  "
             f"mem {fmt_percent(snapshot.memory_percent)}"
         )
-    lines = [f"{title}  {host}".rstrip()]
-    lines.append("")
-    lines.extend(device_lines(snapshot))
-    lines.append("")
-    lines.extend(history_lines(snapshot))
-    if lines[-1] != "":
-        lines.append("")
-    lines.extend(process_lines(snapshot, state, width=width))
-    lines.append("")
+    frame: list[Line] = [[(f"{title}  {host}".rstrip(), "bold")], [(" ", None)]]
+    frame.extend(device_lines(snapshot))
+    frame.append([(" ", None)])
+    history = history_lines(snapshot)
+    if history:
+        frame.extend(history)
+        frame.append([(" ", None)])
+    frame.extend(process_lines(snapshot, state, width=width))
+    frame.append([(" ", None)])
     if errors:
-        lines.append(f"! {errors[-1]}")
-    lines.append(HELP_LINE)
-    return lines
+        frame.append([(f"! {errors[-1]}", "red")])
+    frame.append([(HELP_LINE, None)])
+    return frame
