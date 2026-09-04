@@ -1,6 +1,7 @@
 import curses
 import unittest
 
+import hytop
 from hytop.models.device import DeviceInfo, DeviceMetrics, TemperatureInfo
 from hytop.models.history import DeviceHistory
 from hytop.models.process import HcuProcessInfo, ProcessDeviceUsage
@@ -226,7 +227,7 @@ class TestProcessLines(unittest.TestCase):
 class TestRenderFrame(unittest.TestCase):
     def test_full_frame_sections(self):
         frame = line_texts(render_frame(make_snapshot(), TuiState()))
-        self.assertIn("hytop 0.1.0", frame[0])
+        self.assertIn(f"hytop {hytop.__version__}", frame[0])
         self.assertIn("devices: 2", frame[0])
         joined = "\n".join(frame)
         self.assertIn("HCU", joined)

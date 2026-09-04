@@ -4,8 +4,8 @@ import hytop
 
 
 class TestPackage(unittest.TestCase):
-    def test_version(self):
-        self.assertEqual(hytop.__version__, "0.1.0")
+    def test_version_matches_semver(self):
+        self.assertRegex(hytop.__version__, r"^\d+\.\d+\.\d+$")
 
     def test_all_exports_version(self):
         self.assertIn("__version__", hytop.__all__)

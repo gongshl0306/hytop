@@ -5,19 +5,25 @@
 进程的 USER / CPU% / MEM% / COMMAND。
 
 ```
-$ hytop --once
+$ hytop --frames 2   （TUI 实际效果，带颜色）
 
-hytop 0.1.0  host: sbmc  devices: 8
-HCU  Model        Temp   Power   HCU%    CU%             VRAM   SCLK   MCLK
-  0  DCU-3G        34.0C  162.0W   0.0%   0.0%    136.2G/144.0G  1200M   875M
-  1  DCU-3G        35.0C  149.0W   0.0%   0.0%    135.0G/144.0G  1200M   875M
-  ...
+hytop 0.2.0  host: gpu-server02  devices: 4  host cpu 99.9%  mem 7.8%
 
-    PID  USER     DEV      VRAM   CU%   CPU%  MEM%  COMMAND
- 69132   root       1    135.0G   0.0  98.9   0.8  sglang::scheduler_TP1
- 70118   root       6    134.8G   0.0  94.0   0.8  sglang::scheduler_TP2
-  ...
+HCU  Model        Temp  Power                HCU%    CU%                     VRAM   SCLK   MCLK
+  0  DCU-3G      42.0C   387W [███████████] 100.0%  84.9% [█████████░] 136.2/144.0G  1350M   875M
+  1  DCU-3G      42.0C   360W [███████████] 100.0%  77.1% [█████████░] 135.0/144.0G  1350M   875M
+  2  DCU-3G      48.0C   374W [███████████] 100.0%  75.8% [█████████░] 135.0/144.0G  1350M   875M
+  3  DCU-3G      52.0C   371W [███████████] 100.0%  85.3% [█████████░] 135.0/144.0G  1350M   875M
+
+HCU0: ██▇▆▅▄▃▂▁▁  HCU1: █▇▆▅▄▃▂▁▁
+HCU2: ▁▂▃▄▅▆▇██  HCU3: ▁▁▂▃▄▅▆▇█
+
+    PID  USER     HCU    VRAM   CU%   CPU%  MEM%  COMMAND
+>  69131  root       0  135.0G   7.8  19.5   0.8  sglang::scheduler_TP0
 ```
+
+利用率/显存条形图、每卡历史趋势线（▁▂▃…█）、温度/功耗/利用率阈值变色
+（温度 ≥65°C 黄 ≥75°C 红、功耗 ≥80%/90% 功耗墙变色、利用率 ≥90% 绿色）。
 
 ## 快速开始
 
@@ -42,8 +48,8 @@ ssh x8950_2 'PYTHONPATH=/tmp/hytop/src python3 -m hytop --once'
 本机开发（无卡环境）：
 
 ```bash
-./bin/hytop --backend mock          # 确定性模拟 8 卡
-PYTHONPATH=src python3 -m unittest  # 148 个单元测试，不依赖真卡
+./bin/hytop --backend mock          # 确定性模拟
+PYTHONPATH=src python3 -m unittest  # 全量单元测试，不依赖真卡
 ```
 
 ## 命令行
@@ -52,7 +58,7 @@ PYTHONPATH=src python3 -m unittest  # 148 个单元测试，不依赖真卡
 |---|---|
 | `-d, --device 0,1,3` | 只看指定卡（同时过滤进程表） |
 | `--interval SEC` | 刷新周期（默认 1s） |
-| `--window-ms MS` | HCU%/CU% 的采样窗口（默认 200ms/卡） |
+| `--window-ms MS` | HCU%/CU% 的采样窗口（默认 150ms/卡） |
 | `--once` | 打印一次快照并退出 |
 | `--json` | 打印一次 JSON 快照并退出（schema 稳定，null = 不支持） |
 | `--backend mock` | 无硬件模拟数据源 |
@@ -66,8 +72,8 @@ TUI 按键：`q` 退出 | `r` 重绘 | `↑/↓` 选择 | `p/m/c/u` 按 PID/VRAM
 
 ```
 TUI(curses) / CLI / --json
-        │  只消费 SystemSnapshot
-    Collector（后台线程：瞬时指标每轮全采，阻塞式 HCU%/CU% 窗口逐卡轮转）
+        │  只消费 SystemSnapshot（含每卡历史）
+    Collector（后台线程：瞬时指标每轮全采，阻塞式 HCU%/CU% 窗口每轮 3 卡轮转）
         │
     HCUBackend 协议
     ┌────┴─────────┐
@@ -77,28 +83,36 @@ TUI(curses) / CLI / --json
  host/proc.py (/proc)  → USER/CPU%/RSS/COMMAND
 ```
 
-## 指标口径（v0.1）
+## 指标口径（v0.2，均经真机带负载对拍）
 
-- **HCU%**：窗口值（`rsmi_dev_hcu_util_get`，默认 200ms，后台逐卡轮转，
-  8 卡约 4s 全量刷新一轮，其余时间显示上次测量值）
-- **CU%**：窗口值（`rsmi_dev_cu_util_get`，窗口内平均 CU 占用）
-- **VRAM**：`rsmi_dev_memory_usage_get`，bytes。**注意：空载即显示 ~94%
-  是驱动报告的预留 HBM 占用**（与 hy-smi 的 VRAM% 95% 一致），不是泄漏
-- **Power**：`rsmi_dev_power_get`（µW→W，本机型返回平均功率）；PowerCap 800W
-- **Temp**：Edge / Junction / Memory / Core 四传感器（milli-°C→°C）
-- **SCLK/MCLK**：当前频率档（Hz→MHz），deep sleep 时显示 N/A
-- **进程**：`rsmi_compute_process_info_by_device_get` 提供每卡显存；
-  CPU% 为 top 口径（可超 100%）；USER/MEM% 来自 /proc
+- **HCU%**：窗口值（`rsmi_dev_hcu_util_get`，150ms，后台每轮 3 卡轮转，
+  全卡 ~2.7s 刷新一轮，其余时间显示该卡上次测量值）
+- **CU%**：窗口值（`rsmi_dev_cu_util_get`，窗口内平均 CU 占用）；负载下
+  典型 75-85%
+- **VRAM**：`rsmi_dev_memory_usage_get`，bytes。**注意：空载即 ~94% 是驱动
+  报告的预留 HBM 占用**（与 hy-smi VRAM% 95% 一致），不是泄漏，故不做变色告警
+- **Power**：`rsmi_dev_power_get`（µW→W）；空载 ~150W，推理满载 360-400W
+- **Temp**：Edge/Junction/Memory/Core 四传感器
+- **SCLK**：负载自动升档（1200→1350MHz）可见
+- **进程 CU%**：优先 `rsmi_dev_proc_usage_get`（浮点、负载下真实），
+  回退 by_device 占用、v2 rate
 - 任一指标读取失败显示 **N/A**，绝不显示 0 冒充
 
-## 已知限制（v0.1）
+### 为什么 HCU% 不是每秒实时
+
+本驱动（librocm_smi64.so.2.8）的三个瞬时利用率 API 全部未实现
+（`rsmi_utilization_count_get` 恒 0xFFFFFFFF、`activity_metric_get` 不跟随
+负载、gpu_metrics 表 utilization 字段为哨兵值，详见
+[docs/ffi-notes.md](docs/ffi-notes.md)）——阻塞式窗口采样是唯一真实来源，
+因此采用轮转策略。
+
+## 已知限制（v0.2）
 
 - 只读监控：无设频/功耗/复位/MIG/kill 等控制操作
-- HCU%/CU% 有最多约 4s 的轮转滞后（阻塞窗口测量所迫）
-- 未实现：PCIe 吞吐、ECC、Hylink 拓扑、历史曲线、远程多节点
-- 仅在 BW1100（HYGON DCU-3G，dev 0x6430，librocm_smi64.so.2.8）上验证；
-  其他代际可能有个别指标 N/A
-- FFI 依据与已验证事实见 [docs/ffi-notes.md](docs/ffi-notes.md)
+- HCU%/CU% 有最多 ~2.7s 的轮转滞后（驱动仅提供阻塞窗口采样所迫）
+- 未实现：PCIe 吞吐列（接口已探明可用，见 ffi-notes）、ECC、Hylink 拓扑、
+  进程 kill、CSV 落盘、容器感知
+- 在 BW1100（HYGON DCU-3G，dev 0x6430）上验证；其他代际可能有个别指标 N/A
 
 ## 开发
 

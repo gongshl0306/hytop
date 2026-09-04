@@ -1,6 +1,7 @@
 import io
 import unittest
 
+import hytop
 from hytop.backends.mock import MockBackend
 from hytop.tui.app import run_tui
 
@@ -12,7 +13,7 @@ class TestHeadlessTui(unittest.TestCase):
             MockBackend(), None, interval=0.05, window_ms=10, frames=2, stdout=out
         )
         frame = out.getvalue()
-        self.assertIn("hytop 0.1.0", frame)
+        self.assertIn(f"hytop {hytop.__version__}", frame)
         self.assertIn("DCU-1", frame)  # device rows (MOCK prefix stripped)
         self.assertIn("q quit", frame)  # footer
         self.assertIn("mocktrain", frame)  # process rows

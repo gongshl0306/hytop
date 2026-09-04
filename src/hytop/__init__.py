@@ -1,11 +1,11 @@
 """hytop — an nvitop-like monitor for Hygon DCU (HCU) devices.
 
-v0.1.0 is read-only monitoring: device enumeration, metrics, and the
-process table. No control operations.
+Read-only monitoring: device enumeration, live metrics with bars and
+history sparklines, process table, JSON output. No control operations.
 """
 
 from __future__ import annotations
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 __all__ = ["__version__"]
