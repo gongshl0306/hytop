@@ -13,9 +13,22 @@ from __future__ import annotations
 
 BRAILLE_BASE = 0x2800
 BRAILLE_BLANK = chr(BRAILLE_BASE)
-LEVEL_BITS_BOTTOM = (0x01, 0x04, 0x10, 0x40)
-LEVEL_BITS_TOP = (0x02, 0x08, 0x20, 0x80)
 LEVELS_PER_CELL = 8
+
+# One braille char = 2 dot columns x 4 dot rows; two stacked text rows give
+# 8 vertical levels. A sample occupies ONE dot column in BOTH text rows so
+# columns align vertically (the naive per-row split staggers them).
+# BIT[level][dot_column]: level 0 = screen bottom, 7 = top.
+BIT = {
+    0: (0x40, 0x80),  # bottom text row, dot row 3
+    1: (0x10, 0x20),  # bottom, dot row 2
+    2: (0x04, 0x08),  # bottom, dot row 1
+    3: (0x01, 0x02),  # bottom, dot row 0
+    4: (0x40, 0x80),  # top text row, dot row 3
+    5: (0x10, 0x20),  # top, dot row 2
+    6: (0x04, 0x08),  # top, dot row 1
+    7: (0x01, 0x02),  # top, dot row 0
+}
 
 
 def _downsample(values: list[float | None], width: int) -> list[float | None]:
@@ -31,42 +44,51 @@ def _downsample(values: list[float | None], width: int) -> list[float | None]:
     return out
 
 
-def _column_cells(level: float) -> tuple[int, int]:
-    """Dot bitmasks (bottom_row, top_row) for one sampled value 0-100.
-
-    A real value always lights at least the bottom dot, so idle stretches
-    draw a visible baseline; only gaps (None) render fully blank.
-    """
-    filled = min(LEVELS_PER_CELL, max(1, round(level / 100.0 * LEVELS_PER_CELL)))
+def _sample_bits(level_pct: float, dot_column: int) -> tuple[int, int]:
+    """(bottom_row_bits, top_row_bits) for one sample in one dot column."""
+    filled = min(LEVELS_PER_CELL, max(1, round(level_pct / 100.0 * LEVELS_PER_CELL)))
     bottom = 0
-    for i in range(min(4, filled)):
-        bottom |= LEVEL_BITS_BOTTOM[i]
     top = 0
-    for i in range(4, filled):
-        top |= LEVEL_BITS_TOP[i - 4]
+    for level in range(filled):
+        bit = BIT[level][dot_column]
+        if level < 4:
+            bottom |= bit
+        else:
+            top |= bit
     return bottom, top
 
 
-def braille_chart(values: list[float | None], width: int) -> tuple[str, str]:
-    """Two-row braille waveform for `values`, padded to `width` cells.
+def braille_chart(values: list[float | None], width: int,
+                  prefill: bool = True) -> tuple[str, str]:
+    """Two-row braille waveform for `values`, `width` chars wide.
 
-    Older samples scroll left as new ones arrive; the empty right part of
-    a young chart renders as blank braille cells so the canvas keeps a
-    constant grid.
+    Every character holds two samples (left/right dot column); a sample's
+    dots appear in the same dot column of both text rows, so the columns
+    of the waveform grow perfectly vertically. A young series is padded
+    with its first sample (nvitop-style full-width flat start) unless
+    `prefill` is off.
     """
     if width <= 0:
         return "", ""
-    sampled = _downsample(values, width)
-    sampled = sampled + [None] * (width - len(sampled))
-    bottom_chars, top_chars = [], []
-    for v in sampled:
-        if v is None or v < 0:
-            bottom_chars.append(BRAILLE_BLANK)
-            top_chars.append(BRAILLE_BLANK)
-            continue
-        bottom, top = _column_cells(v)
-        bottom_chars.append(chr(BRAILLE_BASE + bottom))
+    n = width * 2
+    sampled = _downsample(values, n)
+    if len(sampled) < n:
+        filler = None
+        if prefill:
+            filler = next((v for v in sampled if v is not None), None)
+        sampled = sampled + [filler] * (n - len(sampled))
+    top_chars, bottom_chars = [], []
+    for char_index in range(width):
+        top = bottom = 0
+        for dot_column in (0, 1):
+            v = sampled[char_index * 2 + dot_column]
+            if v is None or v < 0:
+                continue
+            b, t = _sample_bits(v, dot_column)
+            bottom |= b
+            top |= t
         top_chars.append(chr(BRAILLE_BASE + top))
+        bottom_chars.append(chr(BRAILLE_BASE + bottom))
     return "".join(top_chars), "".join(bottom_chars)
 
 

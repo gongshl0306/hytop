@@ -14,7 +14,7 @@ import time
 from dataclasses import dataclass
 
 import hytop
-from hytop.tui.braille import avg_series, axis_line, braille_chart, hold_first
+from hytop.tui.braille import avg_series, axis_line, braille_chart
 from hytop.tui.formatter import (
     NA,
     fmt_bytes,
@@ -207,18 +207,14 @@ def chart_lines(snapshot, width: int, interval_s: float) -> list[Line]:
     chart_width = min(80, max(24, width - 6))
     lines: list[Line] = []
 
-    util_series = hold_first(
-        avg_series({i: list(h.utilization.values()) for i, h in snapshot.history.items()}),
-        chart_width,
+    util_series = avg_series(
+        {i: list(h.utilization.values()) for i, h in snapshot.history.items()}
     )
-    mem_series = hold_first(
-        avg_series(
-            {
-                i: _mem_fraction_series(h, snapshot.devices[i].memory_total if i in snapshot.devices else None)
-                for i, h in snapshot.history.items()
-            }
-        ),
-        chart_width,
+    mem_series = avg_series(
+        {
+            i: _mem_fraction_series(h, snapshot.devices[i].memory_total if i in snapshot.devices else None)
+            for i, h in snapshot.history.items()
+        }
     )
 
     def caption(label: str, series) -> Line:

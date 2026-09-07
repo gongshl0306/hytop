@@ -6,7 +6,7 @@ from hytop.models.device import DeviceInfo, DeviceMetrics, TemperatureInfo
 from hytop.models.history import DeviceHistory
 from hytop.models.process import HcuProcessInfo, ProcessDeviceUsage
 from hytop.models.snapshot import SystemSnapshot
-from hytop.tui.braille import avg_series, axis_line, braille_chart, hold_first
+from hytop.tui.braille import avg_series, axis_line, braille_chart
 from hytop.tui.panels import (
     DeviceLayout,
     TuiState,
@@ -138,33 +138,56 @@ class TestBraille(unittest.TestCase):
         self.assertEqual(len(bottom), 10)
 
     def test_full_value_is_full_dot_column(self):
-        top, bottom = braille_chart([100.0], 1)
-        self.assertEqual(top, "⢪")  # levels 4-7
-        self.assertEqual(bottom, "⡕")  # levels 0-3
+        top, bottom = braille_chart([100.0], 1, prefill=False)
+        # both rows light the SAME (left) dot column -> vertically aligned
+        self.assertEqual(top, "⡕")
+        self.assertEqual(bottom, "⡕")
 
     def test_zero_value_draws_baseline_dot(self):
-        top, bottom = braille_chart([0.0], 1)
+        top, bottom = braille_chart([0.0], 1, prefill=False)
         self.assertEqual(top, "⠀")
-        self.assertEqual(bottom, "⠁")
+        self.assertEqual(bottom, "⡀")
 
-    def test_mid_value_fills_bottom_four(self):
-        top, bottom = braille_chart([50.0], 1)
+    def test_mid_value_fills_bottom_half(self):
+        top, bottom = braille_chart([50.0], 1, prefill=False)
         self.assertEqual(bottom, "⡕")
-        self.assertEqual(top, "⠀")  # round(4.0)=4 -> nothing above bottom half
+        self.assertEqual(top, "⠀")
 
-    def test_hold_first_prefills_young_series(self):
-        held = hold_first([66.0], 10)
-        self.assertEqual(held, [66.0] * 10)
+    def test_columns_align_across_rows_at_high_levels(self):
+        # when a sample's dots reach the top text row, they must sit in the
+        # SAME dot column as the bottom row (the v0.4.3 stagger bug)
+        expected = {62.5: ("\u2840", "\u2855"), 75.0: ("\u2850", "\u2855"),
+                    87.5: ("\u2854", "\u2855"), 100.0: ("\u2855", "\u2855")}
+        for value, (top, bottom) in expected.items():
+            got_top, got_bottom = braille_chart([value], 1, prefill=False)
+            self.assertEqual((got_top, got_bottom), (top, bottom), f"value {value}")
+            for char in (got_top, got_bottom):
+                bits = ord(char) - 0x2800
+                in_left = bits & 0x55
+                in_right = bits & 0xAA
+                self.assertFalse(in_left and in_right,
+                                 f"value {value} staggered: {char}")
 
-    def test_hold_first_ignores_mature_and_empty_series(self):
-        mature = [1.0] * 12
-        self.assertIs(hold_first(mature, 10), mature)
-        self.assertEqual(hold_first([], 10), [])
-        self.assertEqual(hold_first([None, None], 5), [None, None])
+    def test_low_values_leave_top_row_blank(self):
+        for value in (0.0, 12.5, 25.0, 37.5):
+            top, bottom = braille_chart([value], 1, prefill=False)
+            self.assertEqual(top, "⠀", f"value {value}")
+            self.assertNotEqual(bottom, "⠀", f"value {value}")
 
-    def test_prefilled_chart_has_no_blank_cells(self):
-        top, bottom = braille_chart(hold_first([66.0], 10), 10)
-        self.assertNotIn("⠀", bottom)  # every column lit in the bottom row
+    def test_two_samples_fill_both_dot_columns(self):
+        top, bottom = braille_chart([100.0, 100.0], 1)
+        self.assertEqual(top, "⣿")
+        self.assertEqual(bottom, "⣿")
+
+    def test_prefill_holds_first_value_across_canvas(self):
+        top, bottom = braille_chart([66.0], 10)
+        self.assertEqual(bottom, "⣿" * 10)  # 66% -> bottom half full
+        self.assertEqual(top, "⣀" * 10)  # level 4 baseline on the top row
+
+    def test_empty_series_stays_blank(self):
+        top, bottom = braille_chart([], 5)
+        self.assertEqual(top, "⠀" * 5)
+        self.assertEqual(bottom, "⠀" * 5)
 
     def test_axis_line_marks(self):
         line = axis_line(120, interval_s=1.0)
