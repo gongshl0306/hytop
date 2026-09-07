@@ -227,13 +227,35 @@ class TestProcessLines(unittest.TestCase):
 class TestRenderFrame(unittest.TestCase):
     def test_full_frame_sections(self):
         frame = line_texts(render_frame(make_snapshot(with_history=True), TuiState()))
-        self.assertIn(f"hytop {hytop.__version__}", frame[0])
-        self.assertIn("devices: 2", frame[0])
         joined = "\n".join(frame)
-        self.assertIn("Devices", joined)
+        self.assertIn(f"hytop {hytop.__version__}", joined)
+        self.assertIn("devices: 2", joined)
+        self.assertIn("┌─ Devices ─", joined)
+        self.assertIn("┌─ Utilization ─", joined)
+        self.assertIn("┌─ Processes ─", joined)
         self.assertIn("AVG GPU UTL", joined)
-        self.assertIn("Processes:", joined)
         self.assertIn("q quit", joined)
+        # every box top/bottom border spans the full width
+        width = 120
+        for line in frame:
+            if line.startswith(("┌", "└", "├")):
+                self.assertEqual(len(line), width)
+
+    def test_box_rows_are_padded_to_width(self):
+        frame = line_texts(render_frame(make_snapshot(), TuiState()))
+        width = 120
+        for line in frame:
+            if line.startswith("│"):
+                self.assertEqual(len(line), width, line)
+
+    def test_charts_dropped_on_short_terminal(self):
+        tall = render_frame(make_snapshot(with_history=True), TuiState(),
+                            height=60)
+        short = render_frame(make_snapshot(with_history=True), TuiState(),
+                             height=24)
+        self.assertTrue(any("AVG GPU UTL" in l for l in line_texts(tall)))
+        self.assertFalse(any("AVG GPU UTL" in l for l in line_texts(short)))
+        self.assertTrue(any("Processes" in l for l in line_texts(short)))
 
     def test_error_line_is_red(self):
         snapshot = make_snapshot()
@@ -245,7 +267,9 @@ class TestRenderFrame(unittest.TestCase):
 
     def test_title_is_bold(self):
         frame = render_frame(make_snapshot(), TuiState())
-        self.assertIn("bold", [s for _, s in frame[0]])
+        title_lines = [line for line in frame if f"hytop {hytop.__version__}" in text_of(line)]
+        self.assertEqual(len(title_lines), 1)
+        self.assertIn("bold", [s for _, s in title_lines[0]])
 
 
 class TestThemeThresholds(unittest.TestCase):

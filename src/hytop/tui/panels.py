@@ -279,8 +279,39 @@ def process_lines(snapshot, state: TuiState, width: int = 120) -> list[Line]:
     return lines
 
 
+def _box_top(title: str, width: int) -> Line:
+    if title:
+        fill = max(0, width - 5 - len(title))
+        return [(f"┌─ {title} " + "─" * fill + "┐", None)]
+    return [("┌" + "─" * max(0, width - 2) + "┐", None)]
+
+
+def _box_bottom(width: int) -> Line:
+    return [("└" + "─" * max(0, width - 2) + "┘", None)]
+
+
+def _box_sep(width: int) -> Line:
+    return [("├" + "─" * max(0, width - 2) + "┤", None)]
+
+
+def _box_row(line: Line, width: int) -> Line:
+    """`│ content(pad) │` — one content line inside the box."""
+    inner = max(0, width - 4)
+    text_len = sum(len(text) for text, _ in line)
+    pad = max(0, inner - text_len)
+    return [("│ ", None)] + line + [(" " * pad + " │", None)]
+
+
+def _box(lines: list[Line], width: int, title: str = "") -> list[Line]:
+    out: list[Line] = [_box_top(title, width)]
+    for line in lines:
+        out.append(_box_row(line, width))
+    out.append(_box_bottom(width))
+    return out
+
+
 def render_frame(snapshot, state: TuiState, width: int = 120,
-                 interval_s: float = 1.0) -> list[Line]:
+                 interval_s: float = 1.0, height: int | None = None) -> list[Line]:
     errors = snapshot.errors
     stamp = time.strftime("%b %d %H:%M:%S", time.localtime(snapshot.timestamp))
     title = (
@@ -295,19 +326,33 @@ def render_frame(snapshot, state: TuiState, width: int = 120,
     if errors:
         title += f"  errors: {len(errors)}"
 
-    layout = DeviceLayout.for_width(width)
-    frame: list[Line] = [
-        [(title, "bold")],
-        [(" ", None)],
-        [("Devices", "bold")],
-    ]
-    frame.extend(device_lines(snapshot, layout))
-    frame.append([(" ", None)])
-    frame.extend(chart_lines(snapshot, width, interval_s))
-    frame.append([(" ", None)])
-    frame.append([("Processes:", "bold")])
-    frame.extend(process_lines(snapshot, state, width=width))
-    frame.append([(" ", None)])
+    layout = DeviceLayout.for_width(width - 4)  # boxes eat "│ " and " │"
+    device_rows = device_lines(snapshot, layout)
+
+    # top + bottom borders, header + data rows, separator after every row
+    # except the last
+    devices_height = 2 + len(device_rows) + max(0, len(device_rows) - 1)
+    charts = chart_lines(snapshot, width - 4, interval_s)
+    charts_height = len(charts) + 2
+    processes = process_lines(snapshot, state, width=width - 4)
+    processes_height = len(processes) + 2
+    fixed_height = 5  # info box + help + error line
+
+    include_charts = True
+    if height is not None:
+        needed = fixed_height + devices_height + processes_height
+        include_charts = needed + charts_height <= height
+
+    frame: list[Line] = _box([[ (title, "bold") ]], width)
+    frame.append(_box_top("Devices", width))
+    for position, row in enumerate(device_rows):
+        frame.append(_box_row(row, width))
+        if position < len(device_rows) - 1:
+            frame.append(_box_sep(width))
+    frame.append(_box_bottom(width))
+    if include_charts:
+        frame.extend(_box(charts, width, title="Utilization"))
+    frame.extend(_box(processes, width, title="Processes"))
     if errors:
         frame.append([(f"! {errors[-1]}", "red")])
     frame.append([(HELP_LINE, None)])

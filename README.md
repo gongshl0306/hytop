@@ -7,7 +7,11 @@
 ```
 $ hytop   （TUI 实际效果，带颜色）
 
-hytop 0.3.0  host: gpu-server02  devices: 4  Sep 07 16:02:11  host cpu 99.9%  mem 7.8%
+┌──────────────────────────────────────────────────────┐
+│ hytop 0.4.0  host: gpu-server02  devices: 4 ...      │
+└──────────────────────────────────────────────────────┘
+┌─ Devices ────────────────────────────────────────────┐
+│ HCU  Model       Temp   Power  HCU%   ...            │  host: gpu-server02  devices: 4  Sep 07 16:02:11  host cpu 99.9%  mem 7.8%
 
 Devices
 HCU  Model       Temp   Power  HCU%                              CU%  VRAM                                SCLK   MCLK
@@ -29,8 +33,9 @@ Processes:
 >  69131  root       0  135.0G   7.8  19.5   0.8  sglang::scheduler_TP0
 ```
 
+面板盒分区（信息 / Devices / Utilization / Processes，行间分隔线）、
 实心渐变条形图（绿→黄→红）、AVG GPU UTL/MEM 盲文点阵历史波形 + 时间轴、
-列宽自适应终端、节标题分区；阈值变色：温度 ≥65°C 黄 ≥75°C 红、功耗
+列宽自适应终端；阈值变色：温度 ≥65°C 黄 ≥75°C 红、功耗
 ≥80%/90% 功耗墙变色。
 
 ## 快速开始
