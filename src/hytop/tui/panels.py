@@ -12,6 +12,7 @@ from __future__ import annotations
 import socket
 import time
 from dataclasses import dataclass
+from typing import List, Optional, Tuple
 
 import hytop
 from hytop.tui.braille import avg_series, axis_line, braille_chart
@@ -27,8 +28,8 @@ from hytop.tui.formatter import (
 )
 from hytop.tui.theme import bar_style, power_style, temp_style
 
-Segment = tuple[str, str | None]
-Line = list[Segment]
+Segment = Tuple[str, Optional[str]]
+Line = List[Segment]
 
 SORT_KEYS = ("pid", "vram", "cu", "cpu")
 

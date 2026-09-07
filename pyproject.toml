@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "hytop"
-version = "0.5.2"
+version = "0.5.3"
 description = "nvitop-style terminal monitor for Hygon DCU (HCU) accelerators - zero-dependency, read-only, with live utilization charts and JSON output"
 readme = "README.md"
 requires-python = ">=3.8"

@@ -8,6 +8,8 @@ this driver (reserved HBM), an alarm would be a false positive.
 
 from __future__ import annotations
 
+from typing import Optional
+
 STYLE_NAMES = ("bold", "red", "yellow", "green", "cyan", "magenta")
 
 TEMP_RED_C = 75.0
@@ -22,7 +24,7 @@ UTIL_GREEN_PCT = 90.0
 BAR_GREEN_BELOW = 60.0
 BAR_YELLOW_BELOW = 85.0
 
-Style = str | None
+Style = Optional[str]
 
 
 def temp_style(celsius: float | None) -> Style:
