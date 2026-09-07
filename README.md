@@ -1,138 +1,211 @@
 # hytop
 
-`nvitop` 风格的海光 DCU（HCU）只读监控工具。零第三方依赖——ctypes 直连
-`/opt/hyhal/lib/librocm_smi64.so`，标准库 curses 做 TUI，`/proc` 解析补齐
-进程的 USER / CPU% / MEM% / COMMAND。
+[![version](https://img.shields.io/badge/version-0.5.2-blue)](#requirements)
+[![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+[![python](https://img.shields.io/badge/python-3.8%2B-blue)](https://www.python.org/)
+[![platform](https://img.shields.io/badge/platform-Linux-lightgrey)](#requirements)
+[![deps](https://img.shields.io/badge/dependencies-0-success)](#requirements)
+
+**[English](README.md) | [简体中文](README.zh-CN.md)**
+
+An **nvitop-style terminal monitor for Hygon DCU (HCU) accelerators** —
+read-only, zero third-party dependencies, with live utilization bars,
+braille history charts, a process table, and JSON output.
+
+hytop talks to the HCU driver the same way `hy-smi` does — through the
+standard `rsmi_*` interface of `librocm_smi64.so` via `ctypes` — but turns
+it into an interactive, top-like view: device panel, host & GPU utilization
+waveforms, per-device process table, threshold coloring, and a stable JSON
+schema for scripts and agents.
+
+> Verified on 8× HYGON DCU-3G (BW1100-class, `librocm_smi64.so.2.8`):
+> device metrics match `hy-smi` under real inference load — per-card power
+> 150 → 400 W, SCLK boost 1200 → 1350 MHz, CU occupancy 55–85%.
+
+## Demo
 
 ```
-$ hytop   （TUI 实际效果，带颜色）
-
-┌──────────────────────────────────────────────────────┐
-│ hytop 0.4.0  host: gpu-server02  devices: 4 ...      │
-└──────────────────────────────────────────────────────┘
-┌─ Devices ────────────────────────────────────────────┐
-│ HCU  Model       Temp   Power  HCU%   ...            │  host: gpu-server02  devices: 4  Sep 07 16:02:11  host cpu 99.9%  mem 7.8%
-
-Devices
-HCU  Model       Temp   Power  HCU%                              CU%  VRAM                                SCLK   MCLK
-  0  DCU-3G      42.0C    387W  ▏██████████████████████  100.0%  84.9%  ▏██████████████  136.2/144.0G  1350M   875M
-  1  DCU-3G      42.0C    360W  ▏██████████████████████  100.0%  77.1%  ▏██████████████  135.0/144.0G  1350M   875M
-  2  DCU-3G      48.0C    374W  ▏██████████████████████  100.0%  75.8%  ▏██████████████  135.0/144.0G  1350M   875M
-  3  DCU-3G      52.0C    371W  ▏██████████████████████  100.0%  85.3%  ▏██████████████  135.0/144.0G  1350M   875M
-
-AVG GPU UTL: 92.3%
-⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣇⣇⣇⣧⣧⣇⣇⣇⡧⡧⡧⡧⡧⣇⣇⣇⣇⣧⣧⣇⡧⡧⡧⡧⡧⡧⡧⣇⣇⣇⣇⣇⣇⣇⣇⣇⣇⣇
-⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⢠⢠⡠⡠⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
-AVG GPU MEM: 93.7%
-⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
-⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
-                                                          60s        30s
-
-Processes:
-    PID  USER     HCU    VRAM   CU%   CPU%  MEM%  COMMAND
->  69131  root       0  135.0G   7.8  19.5   0.8  sglang::scheduler_TP0
+┌──────────────────────────────────────────────────────────────────────────┐
+│ hytop 0.5.2  host: gpu-server02  devices: 8  Sep 07 07:53:54             │
+└──────────────────────────────────────────────────────────────────────────┘
+┌─ Devices ────────────────────────────────────────────────────────────────┐
+│ HCU  Model     Temp   Power  HCU%                             CU%  VRAM  │
+├──────────────────────────────────────────────────────────────────────────┤
+│  0  DCU-3G    44.0C   323W  ▏████████████  100.0%  67.2%  ▏███ 137.4/144G │
+├──────────────────────────────────────────────────────────────────────────┤
+│  1  DCU-3G    44.0C   298W  ▏████████████   99.3%  73.6%  ▏███ 135.6/144G │
+└──────────────────────────────────────────────────────────────────────────┘
+┌─ Utilization ────────────────────────────────────────────────────────────┐
+│ CPU: 2.4%                            AVG GPU UTL: 94.4%                  │
+│ ⠋⠋⠋⠋⠋⠋⠋⠋⠋⠋ (last 80s)            ⣽⣾⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿                 │
+│ MEM: 8.2%                            AVG GPU MEM: 94.3%                  │
+│ ⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀                        ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿                 │
+│                |60s        |30s      (time axis, right edge = now)       │
+└──────────────────────────────────────────────────────────────────────────┘
+┌─ Processes ──────────────────────────────────────────────────────────────┐
+│   PID  USER     HCU  VRAM    CU%   CPU%  MEM%  COMMAND                   │
+│ 69131  root       0  135.6G  0.0   99.0   0.9  sglang::scheduler_TP0     │
+│ 69132  root       1  135.6G  0.0   97.3   0.9  sglang::scheduler_TP1     │
+└──────────────────────────────────────────────────────────────────────────┘
+q quit | r refresh | up/down select | p sort PID | m sort VRAM | c sort CU | u sort CPU | 1-9 filter HCU | a all
 ```
 
-面板盒分区（信息 / Devices / Utilization / Processes，行间分隔线）、
-实心渐变条形图（绿→黄→红）、AVG GPU UTL/MEM 盲文点阵历史波形 + 时间轴、
-列宽自适应终端；阈值变色：温度 ≥65°C 黄 ≥75°C 红、功耗
-≥80%/90% 功耗墙变色。
+Solid gradient bars (green → yellow → red), braille utilization waveforms
+(one character = one second, 8 vertical levels), threshold coloring
+(temperature ≥ 65 °C yellow / ≥ 75 °C red, power ≥ 80 %/90 % of cap), and
+bordered panels.
 
-## 快速开始
+## Why
 
-目标机要求：Linux、`python3 >= 3.8`、HCU 驱动位于 `/opt/hyhal`（或用
-`HYTOP_LIBRARY_PATH` 指定库目录）。**目标机无需 pip、无需安装任何依赖。**
+Hygon DCU servers ship with `hy-smi`, a batch text tool. There was no
+`nvitop` for them. hytop fills that gap while keeping the deployment story
+of a cluster tool: **one rsync, no pip, no root install required**.
 
-```bash
-# 部署到 DCU 节点（默认 x8950_2），可选中安装到 /opt 并进 PATH
-./scripts/deploy.sh x8950_2 /opt/hytop
-ssh x8950_2 'ln -sfn /opt/hytop/bin/hytop /usr/local/bin/hytop'
+- **Zero dependencies** — `ctypes` (driver FFI) + `curses` (TUI) + `/proc`
+  parsing. If `python3 ≥ 3.8` runs, hytop runs.
+- **Honest numbers** — every metric is unit-normalized at the backend
+  (m°C → °C, µW → W, Hz → MHz); unsupported fields render as `N/A`, never 0.
+- **Validated against `hy-smi`** under real inference load; the host CPU%
+  matches `top` (busy excludes idle/iowait/steal — an earlier build counted
+  idle and always showed ~100 %, caught by comparing against `top`).
+- **Noise-proof UI** — windowed metrics are sampled by a background
+  collector that rotates across devices, so the UI never blocks on the
+  driver, and a failing read degrades to `N/A` instead of crashing.
 
-# 之后目标机上直接使用（任意用户、任意目录）
-hytop --once
-hytop --json
-ssh -t x8950_2 hytop        # 交互式 TUI
+## Requirements
 
-# 或不安装、临时试用
-./scripts/deploy.sh x8950_2 /tmp/hytop
-ssh x8950_2 'PYTHONPATH=/tmp/hytop/src python3 -m hytop --once'
-```
-
-本机开发（无卡环境）：
-
-```bash
-./bin/hytop --backend mock          # 确定性模拟
-PYTHONPATH=src python3 -m unittest  # 全量单元测试，不依赖真卡
-```
-
-## 命令行
-
-| 参数 | 说明 |
+| What | Why |
 |---|---|
-| `-d, --device 0,1,3` | 只看指定卡（同时过滤进程表） |
-| `--interval SEC` | 刷新周期（默认 1s） |
-| `--window-ms MS` | HCU%/CU% 的采样窗口（默认 150ms/卡） |
-| `--once` | 打印一次快照并退出 |
-| `--json` | 打印一次 JSON 快照并退出（schema 稳定，null = 不支持） |
-| `--backend mock` | 无硬件模拟数据源 |
-| `--frames N` | 无头渲染 N 帧后打印最后一帧并退出（测试/无 pty 环境） |
-| `--version` | 版本号 |
+| Linux, `python3 ≥ 3.8` | standard library only |
+| Hygon hyhal driver stack | `/opt/hyhal/lib/librocm_smi64.so` (or `HYTOP_LIBRARY_PATH=/dir`) |
+| Loaded kernel driver | `/dev/kfd`, `/dev/dri/renderD*` present |
+| Read access to device nodes | works as non-root when nodes are group/world-writable (verified) |
 
-TUI 按键：`q` 退出 | `r` 重绘 | `↑/↓` 选择 | `p/m/c/u` 按 PID/VRAM/CU%/CPU%
-排序 | `1-9` 过滤卡 | `a` 显示全部。
+Other Hygon DCU generations that ship the same RSMI interface should work;
+unsupported metrics degrade to `N/A`. Not applicable to NVIDIA GPUs; AMD
+ROCm shares API ancestry but is untested. Without a driver you get a clean,
+actionable error (searched paths + hints), never a traceback.
 
-## 架构
-
-```
-TUI(curses) / CLI / --json
-        │  只消费 SystemSnapshot（含每卡历史）
-    Collector（后台线程：瞬时指标每轮全采，阻塞式 HCU%/CU% 窗口每轮 3 卡轮转）
-        │
-    HCUBackend 协议
-    ┌────┴─────────┐
- NativeBackend   MockBackend
-    │
- ffi/rsmi.py (ctypes) → librocm_smi64.so → HCU 驱动 → DCU
- host/proc.py (/proc)  → USER/CPU%/RSS/COMMAND
-```
-
-## 指标口径（v0.2，均经真机带负载对拍）
-
-- **HCU%**：窗口值（`rsmi_dev_hcu_util_get`，150ms，后台每轮 3 卡轮转，
-  全卡 ~2.7s 刷新一轮，其余时间显示该卡上次测量值）
-- **CU%**：窗口值（`rsmi_dev_cu_util_get`，窗口内平均 CU 占用）；负载下
-  典型 75-85%
-- **VRAM**：`rsmi_dev_memory_usage_get`，bytes。**注意：空载即 ~94% 是驱动
-  报告的预留 HBM 占用**（与 hy-smi VRAM% 95% 一致），不是泄漏，故不做变色告警
-- **Power**：`rsmi_dev_power_get`（µW→W）；空载 ~150W，推理满载 360-400W
-- **Temp**：Edge/Junction/Memory/Core 四传感器
-- **SCLK**：负载自动升档（1200→1350MHz）可见
-- **进程 CU%**：优先 `rsmi_dev_proc_usage_get`（浮点、负载下真实），
-  回退 by_device 占用、v2 rate
-- 任一指标读取失败显示 **N/A**，绝不显示 0 冒充
-
-### 为什么 HCU% 不是每秒实时
-
-本驱动（librocm_smi64.so.2.8）的三个瞬时利用率 API 全部未实现
-（`rsmi_utilization_count_get` 恒 0xFFFFFFFF、`activity_metric_get` 不跟随
-负载、gpu_metrics 表 utilization 字段为哨兵值，详见
-[docs/ffi-notes.md](docs/ffi-notes.md)）——阻塞式窗口采样是唯一真实来源，
-因此采用轮转策略。
-
-## 已知限制（v0.2）
-
-- 只读监控：无设频/功耗/复位/MIG/kill 等控制操作
-- HCU%/CU% 有最多 ~2.7s 的轮转滞后（驱动仅提供阻塞窗口采样所迫）
-- 未实现：PCIe 吞吐列（接口已探明可用，见 ffi-notes）、ECC、Hylink 拓扑、
-  进程 kill、CSV 落盘、容器感知
-- 在 BW1100（HYGON DCU-3G，dev 0x6430）上验证；其他代际可能有个别指标 N/A
-
-## 开发
+## Quick start
 
 ```bash
-PYTHONPATH=src python3 -m unittest discover -v   # 全量测试
-./bin/hytop --backend mock --frames 3            # 无头看一帧
+# deploy to a DCU node (rsync only — nothing is installed on the target)
+./scripts/deploy.sh user@host /opt/hytop
+ssh user@host 'ln -sfn /opt/hytop/bin/hytop /usr/local/bin/hytop'
+
+# then, on any DCU node, any user:
+hytop                 # live TUI
+hytop --once          # one text snapshot
+hytop --json          # one JSON snapshot (stable schema, null = N/A)
 ```
 
-Layout: `src/hytop/{models,backends,ffi,collector,host,tui}` — Backend 负责
-拿准原始数据，Collector 负责采样缓存，models 提供稳定数据模型，UI 只展示。
+Or from source without installing:
+
+```bash
+PYTHONPATH=src python3 -m hytop --once     # on a DCU node
+./bin/hytop --backend mock                 # anywhere: deterministic 8-GPU simulation
+pip install .                              # optional: proper install (console script)
+```
+
+## CLI
+
+| Option | Meaning |
+|---|---|
+| `-d, --device 0,1,3` | watch only these HCUs (filters the process table too) |
+| `--interval SEC` | refresh period (default 1.0) |
+| `--window-ms MS` | HCU%/CU% sampling window per device (default 150) |
+| `--once` | print one snapshot as text and exit |
+| `--json` | print one snapshot as JSON and exit |
+| `--backend mock` | deterministic simulation without hardware |
+| `--frames N` | headless: render N refreshes, print the last frame, exit |
+| `--version` | print version |
+
+TUI keys: `q` quit · `r` redraw · `↑/↓` select · `p/m/c/u` sort by
+PID/VRAM/CU%/CPU% · `1-9` filter HCUs · `a` show all.
+
+### JSON
+
+```json
+{
+  "hytop_version": "0.5.2",
+  "timestamp": 1788489077.1,
+  "host": {"cpu_percent": 2.2, "memory_percent": 8.2},
+  "devices": [{
+      "index": 0, "name": "HYGON DCU-3G", "pci_bus_id": "0000:05:00.0",
+      "numa_node": 0, "cu_count": 64,
+      "utilization": 100.0, "cu_utilization": 84.9,
+      "memory_used": 137408905216, "memory_total": 154602045440,
+      "temperature": {"edge": 44.0, "junction": 50.0, "memory": 55.0, "core": 41.0},
+      "power": 323.0, "power_cap": 800.0, "sclk_mhz": 1350.0, "mclk_mhz": 875.0
+  }],
+  "processes": [{
+      "pid": 69131, "username": "root", "command": "sglang::scheduler_TP0",
+      "cpu_percent": 99.0, "host_memory": 934598656, "host_memory_percent": 0.9,
+      "devices": {"0": {"vram_used": 145681686528, "cu_occupancy": 7.8, "sdma_usage": 0}}
+  }],
+  "errors": []
+}
+```
+
+## Architecture
+
+```
+TUI (curses) / CLI / --json
+        │  consumes SystemSnapshot only (incl. per-device history)
+    Collector (background thread: instant metrics every tick for all
+               devices + rotating blocking-window HCU%/CU% samples)
+        │
+    HCUBackend protocol
+    ┌────┴──────────┐
+ NativeBackend    MockBackend
+    │
+ ffi/rsmi.py (ctypes) → librocm_smi64.so → HCU kernel driver → DCU
+ host/proc.py (/proc)  → USER / CPU% / RSS / COMMAND
+```
+
+The backend fetches raw data and converts units, the collector samples and
+caches, models define the data contract, the UI only renders. Development
+works on any machine via the mock backend; the test suite (193 unittest
+cases) needs no hardware.
+
+## Metric semantics (validated under load)
+
+- **HCU% / CU%** — driver-sampled windows (`rsmi_dev_hcu_util_get` /
+  `rsmi_dev_cu_util_get`, 150 ms) rotated across devices: ~2.7 s per full
+  sweep on 8 cards; each card shows its latest window until refreshed.
+  The driver offers no non-blocking utilization counter — all three
+  candidates return sentinel data (documented in
+  [docs/ffi-notes.md](docs/ffi-notes.md)).
+- **VRAM** — as reported by `rsmi_dev_memory_usage_get`. ~94 % at idle is
+  driver-reserved HBM (matches hy-smi), deliberately not alarmed.
+- **Power** — `rsmi_dev_power_get` (µW → W); cap typically 800 W.
+- **Temperatures** — edge / junction / memory / core sensors.
+- **Process rows** — per-device VRAM from
+  `rsmi_compute_process_info_by_device_get`, CU% preferring
+  `rsmi_dev_proc_usage_get`; USER / RSS / CPU% / COMMAND parsed from /proc.
+- **Host CPU%** matches `top` (busy = user+nice+system+irq+softirq,
+  normalized by core count); **host MEM%** = (total − available) / total.
+
+## Known limitations
+
+- Read-only by design: no clock/power control, reset, MIG, or kill.
+- HCU%/CU% lag up to ~2.7 s on 8 cards (blocking-window sampling is the
+  only real source on this driver).
+- No PCIe throughput, ECC, Hylink topology, CSV logging, or container
+  attribution yet (the PCIe fields are already probed and documented).
+- Verified on BW1100-class hardware; other generations may show `N/A`.
+
+## Contributing
+
+```bash
+PYTHONPATH=src python3 -m unittest discover -v   # 193 tests, no hardware needed
+./bin/hytop --backend mock --frames 3            # headless preview of one frame
+```
+
+The FFI ground truth (verified signatures, struct sizes, quirks) lives in
+[docs/ffi-notes.md](docs/ffi-notes.md) — read it before touching
+`ffi/rsmi.py`. PRs welcome: bug fixes, new read-only metrics, packaging.
+
+## License
+
+[MIT](LICENSE)
