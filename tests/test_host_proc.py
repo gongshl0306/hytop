@@ -7,10 +7,9 @@ from hytop.host.proc import (
     PAGE_SIZE,
     ProcessSampler,
     ProcSample,
-    cpu_total_ticks,
+    cpu_fields,
     host_cpu_percent,
     host_memory,
-    parse_cpu_total,
     parse_meminfo,
     parse_stat_line,
     proc_cpu_percent,
@@ -90,14 +89,18 @@ class TestParsers(FakeProc):
         self.assertEqual(total, 1_000_000 * 1024)
         self.assertEqual(avail, 250_000 * 1024)
 
-    def test_cpu_total(self):
+    def test_cpu_fields(self):
         self.write_proc_stat(1234)
-        self.assertEqual(cpu_total_ticks(self.root), 1234 + 500 * 0)  # aggregate line only
-        # note: aggregate line is the fixture's first "cpu " line
+        fields = cpu_fields(self.root)
+        self.assertEqual(fields["user"], 1234)
+        self.assertEqual(fields["idle"], 0)
+        self.assertEqual(len(fields), 10)
 
-    def test_parse_cpu_total_rejects_non_cpu(self):
-        self.assertIsNone(parse_cpu_total("cpuX 1 2 3"))
-        self.assertIsNone(parse_cpu_total("garbage"))
+    def test_parse_cpu_fields_rejects_non_cpu(self):
+        from hytop.host.proc import parse_cpu_fields
+
+        self.assertIsNone(parse_cpu_fields("cpuX 1 2 3"))
+        self.assertIsNone(parse_cpu_fields("garbage"))
 
     def test_host_memory_missing_file(self):
         self.assertIsNone(host_memory(self.root))
@@ -127,18 +130,34 @@ class TestCpuMath(unittest.TestCase):
             proc_cpu_percent(self.sample(100, 1.0), self.sample(50, 2.0)), 0.0
         )
 
-    def test_host_percent(self):
-        # 200 ticks over 2s on a single core: 100% of one core-equivalent
+    @staticmethod
+    def fields(**kw):
+        from hytop.host.proc import CPU_FIELD_NAMES
+
+        base = {name: 0 for name in CPU_FIELD_NAMES}
+        base.update(kw)
+        return base
+
+    def test_host_percent_counts_only_busy_fields(self):
+        # 200 busy ticks over 2s on a single core
         expected = 200 / (2.0 * CLK_TCK) * 100
-        self.assertAlmostEqual(host_cpu_percent(1000, 1200, 2.0), expected)
-        self.assertIsNone(host_cpu_percent(None, 10, 1.0))
-        self.assertIsNone(host_cpu_percent(0, 10, 0.0))
+        prev = self.fields(user=1000)
+        now = self.fields(user=1200)
+        self.assertAlmostEqual(host_cpu_percent(prev, now, 2.0), expected)
+        # idle growth alone is NOT busy (the v0.5.0 bug showed ~100% always)
+        prev = self.fields(user=1000, idle=50000)
+        now = self.fields(user=1000, idle=60000)
+        self.assertAlmostEqual(host_cpu_percent(prev, now, 2.0), 0.0)
+        self.assertIsNone(host_cpu_percent(None, now, 1.0))
+        self.assertIsNone(host_cpu_percent(prev, now, 0.0))
 
     def test_host_percent_normalized_by_cores(self):
-        # 200 ticks over 2s across 4 cores: quarter of one core each
+        # 200 busy ticks over 2s across 4 cores: quarter of one core each
         expected = 200 / (2.0 * CLK_TCK * 4) * 100
-        self.assertAlmostEqual(host_cpu_percent(1000, 1200, 2.0, ncores=4), expected)
-        self.assertIsNone(host_cpu_percent(1000, 1200, 2.0, ncores=0))  # invalid
+        prev = self.fields(user=1000)
+        now = self.fields(user=1200)
+        self.assertAlmostEqual(host_cpu_percent(prev, now, 2.0, ncores=4), expected)
+        self.assertIsNone(host_cpu_percent(prev, now, 2.0, ncores=0))  # invalid
 
 
 class TestCoreCount(FakeProc):

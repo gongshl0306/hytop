@@ -120,24 +120,28 @@ def host_memory(root: str) -> tuple[int, int] | None:
     return total, info.get("MemAvailable", 0)
 
 
-def parse_cpu_total(first_line: str) -> int | None:
-    """Sum of all tick counts on the aggregate 'cpu ' line."""
-    parts = first_line.split()
+CPU_FIELD_NAMES = ("user", "nice", "system", "idle", "iowait",
+                   "irq", "softirq", "steal", "guest", "guest_nice")
+# top's busy definition: idle/iowait/steal are not the CPU working for us,
+# and guest is already counted inside user (summing it double counts)
+CPU_BUSY_FIELDS = ("user", "nice", "system", "irq", "softirq")
+
+
+def parse_cpu_fields(line: str) -> dict[str, int] | None:
+    """Aggregate 'cpu ' line -> named tick fields; None if not the agg line."""
+    parts = line.split()
     if not parts or parts[0] != "cpu":
         return None
-    total = 0
-    for token in parts[1:]:
-        try:
-            total += int(token)
-        except ValueError:
-            return None
-    return total
+    fields: dict[str, int] = {}
+    for name, token in zip(CPU_FIELD_NAMES, parts[1:]):
+        fields[name] = int(token)
+    return fields
 
 
-def cpu_total_ticks(root: str) -> int | None:
+def cpu_fields(root: str) -> dict[str, int] | None:
     try:
         with open(os.path.join(root, "stat")) as f:
-            return parse_cpu_total(f.readline())
+            return parse_cpu_fields(f.readline())
     except OSError:
         return None
 
@@ -166,19 +170,22 @@ def core_count(root: str) -> int:
 
 
 def host_cpu_percent(
-    prev_total: int | None,
-    now_total: int | None,
+    prev: dict[str, int] | None,
+    now: dict[str, int] | None,
     wall_seconds: float,
     ncores: int = 1,
 ) -> float | None:
-    """Whole-system CPU% normalized to total capacity (0 ~ 100).
+    """Whole-system CPU% across ALL cores, normalized to 0 ~ 100.
 
-    /proc/stat aggregates ticks across all cores, so the delta is divided
-    by ncores; unlike process CPU%, this never exceeds 100.
+    /proc/stat aggregates ticks over every core, so the busy delta is
+    divided by ncores. Busy follows `top`: user+nice+system+irq+softirq;
+    idle and iowait are excluded, steal is not our CPU working, and guest
+    is already inside user.
     """
-    if prev_total is None or now_total is None or wall_seconds <= 0 or ncores <= 0:
+    if not prev or not now or wall_seconds <= 0 or ncores <= 0:
         return None
-    return max(0.0, (now_total - prev_total) / (wall_seconds * CLK_TCK * ncores) * 100.0)
+    busy = sum(now[f] - prev[f] for f in CPU_BUSY_FIELDS)
+    return max(0.0, busy / (wall_seconds * CLK_TCK * ncores) * 100.0)
 
 
 class ProcessSampler:
@@ -194,13 +201,13 @@ class ProcessSampler:
         self._ncores = ncores
         self._prev: dict[int, ProcSample] = {}
         self._prev_cpu_pct: dict[int, float | None] = {}
-        self._prev_host_total: int | None = None
+        self._prev_host_fields: dict[str, int] | None = None
         self._prev_host_pct: float | None = None
         self._prev_wall: float | None = None
 
     def refresh(self, pids: list[int]) -> dict[int, ProcSample]:
         now = self._clock()
-        host_total = cpu_total_ticks(self.root)
+        host_fields = cpu_fields(self.root)
         if self._ncores is None:
             self._ncores = core_count(self.root)
         samples: dict[int, ProcSample] = {}
@@ -213,14 +220,15 @@ class ProcessSampler:
             pid: proc_cpu_percent(self._prev.get(pid), sample)
             for pid, sample in samples.items()
         }
-        if self._prev_wall is not None and self._prev_host_total is not None:
+        if self._prev_wall is not None and self._prev_host_fields is not None:
             self._prev_host_pct = host_cpu_percent(
-                self._prev_host_total, host_total, now - self._prev_wall, self._ncores or 1
+                self._prev_host_fields, host_fields, now - self._prev_wall,
+                self._ncores or 1,
             )
         else:
             self._prev_host_pct = None
         self._prev = samples
-        self._prev_host_total = host_total
+        self._prev_host_fields = host_fields
         self._prev_wall = now
         return samples
 
