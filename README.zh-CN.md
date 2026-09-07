@@ -2,7 +2,7 @@
 
 [![version](https://img.shields.io/badge/version-0.5.2-blue)](#环境要求)
 [![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![python](https://img.shields.io/badge/python-3.8%2B-blue)](https://www.python.org/)
+[![python](https://img.shields.io/badge/python-3.7%2B-blue)](https://www.python.org/)
 [![platform](https://img.shields.io/badge/platform-Linux-lightgrey)](#环境要求)
 [![deps](https://img.shields.io/badge/dependencies-0-success)](#环境要求)
 
@@ -57,7 +57,7 @@ q 退出 | r 重绘 | ↑/↓ 选择 | p 按 PID 排序 | m 按 VRAM | c 按 CU%
 hytop 补上这个空缺，同时保留集群工具的部署方式：**一次 rsync，不用 pip，无需 root 安装**。
 
 - **零依赖** —— `ctypes`（驱动 FFI）+ `curses`（TUI）+ `/proc` 解析。
-  只要 `python3 ≥ 3.8` 能跑，hytop 就能跑。
+  只要 `python3 ≥ 3.7` 能跑，hytop 就能跑。
 - **数字诚实** —— 所有指标在后端完成单位换算（m°C→°C、µW→W、Hz→MHz），
   不支持的字段显示 `N/A`，绝不用 0 冒充。
 - **与 `hy-smi` 对拍验证** —— 真实推理负载下逐卡对比；主机 CPU% 与 `top` 一致
@@ -70,7 +70,7 @@ hytop 补上这个空缺，同时保留集群工具的部署方式：**一次 rs
 
 | 条件 | 说明 |
 |---|---|
-| Linux，`python3 ≥ 3.8` | 仅标准库 |
+| Linux，`python3 ≥ 3.7` | 仅标准库 |
 | 海光 hyhal 驱动栈 | `/opt/hyhal/lib/librocm_smi64.so`（或 `HYTOP_LIBRARY_PATH=/目录`） |
 | 内核驱动已加载 | 存在 `/dev/kfd`、`/dev/dri/renderD*` |
 | 设备节点可读 | 权限开放时非 root 可用（已验证） |
