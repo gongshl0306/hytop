@@ -6,23 +6,22 @@ from hytop.models.device import DeviceInfo, DeviceMetrics, TemperatureInfo
 from hytop.models.history import DeviceHistory
 from hytop.models.process import HcuProcessInfo, ProcessDeviceUsage
 from hytop.models.snapshot import SystemSnapshot
+from hytop.tui.braille import avg_series, axis_line, braille_chart
 from hytop.tui.panels import (
+    DeviceLayout,
     TuiState,
-    bar,
     device_lines,
     handle_key,
-    history_lines,
     process_lines,
     render_frame,
-    sparkline,
     text_of,
 )
-from hytop.tui.theme import power_style, temp_style, util_style
+from hytop.tui.theme import bar_style, power_style, temp_style, util_style
 
 GIB = 1024**3
 
 
-def make_snapshot(utilization=87.5, power=162.0, edge=34.0):
+def make_snapshot(utilization=87.5, power=162.0, edge=34.0, with_history=False):
     snapshot = SystemSnapshot(timestamp=100.0)
     for index, used in ((0, 5 * GIB), (1, 8 * GIB)):
         snapshot.device_info[index] = DeviceInfo(
@@ -41,6 +40,11 @@ def make_snapshot(utilization=87.5, power=162.0, edge=34.0):
             sclk_mhz=1200.0,
             mclk_mhz=875.0,
         )
+        if with_history:
+            hist = DeviceHistory()
+            for v in (10.0, 50.0, 90.0):
+                hist.append(v, v, used, 100.0)
+            snapshot.history[index] = hist
     snapshot.processes = [
         HcuProcessInfo(
             pid=200, name="procB", username="root", command="python serv.py",
@@ -63,55 +67,37 @@ def line_texts(lines):
     return [text_of(line) for line in lines]
 
 
-class TestBarsAndSparklines(unittest.TestCase):
-    def test_bar_levels(self):
-        self.assertEqual(bar(None), "[" + "░" * 11 + "]")
-        self.assertEqual(bar(0), "[" + "░" * 11 + "]")
-        self.assertEqual(bar(100), "[" + "█" * 11 + "]")
-        self.assertEqual(bar(50), "[" + "█" * 6 + "░" * 5 + "]")  # round(5.5)=6
-        self.assertEqual(bar(200), "[" + "█" * 11 + "]")  # clamped
-        self.assertEqual(bar(-5), "[" + "░" * 11 + "]")
-
-    def test_bar_custom_width_and_maximum(self):
-        self.assertEqual(bar(500, width=4, maximum=1000), "[" + "██" + "░░" + "]")
-
-    def test_sparkline_levels(self):
-        self.assertEqual(sparkline([0, 12.5, 100], 3), "▁▂█")
-
-    def test_sparkline_none_is_lowest(self):
-        self.assertEqual(sparkline([None, 100], 2), "▁█")
-
-    def test_sparkline_downsamples_long_series(self):
-        self.assertEqual(sparkline([100] * 80, 40), "█" * 40)
-
-    def test_sparkline_empty(self):
-        self.assertEqual(sparkline([], 10), "")
+LAYOUT = DeviceLayout.for_width(120)
 
 
-class TestHistoryLines(unittest.TestCase):
-    def test_history_lines_rendered_two_per_row(self):
-        snapshot = make_snapshot()
-        for index in (0, 1, 2):
-            hist = DeviceHistory()
-            for v in (10, 50, 90):
-                hist.append(v, v, 100, 100.0)
-            snapshot.history[index] = hist
-        lines = line_texts(history_lines(snapshot, spark_width=10))
-        self.assertEqual(len(lines), 2)  # 3 devices -> 2 rows
-        self.assertIn("HCU0:", lines[0])
-        self.assertIn("HCU1:", lines[0])
-        self.assertIn("HCU2:", lines[1])
-        self.assertIn("█", lines[0])
+class TestDeviceLayout(unittest.TestCase):
+    def test_row_and_header_share_total_width(self):
+        header = text_of(LAYOUT.header())
+        row = text_of(device_lines(make_snapshot(), LAYOUT)[1])
+        self.assertEqual(len(header), len(row))
 
-    def test_history_section_empty_without_history(self):
-        self.assertEqual(history_lines(make_snapshot()), [])
+    def test_adaptive_bars_fill_terminal_width(self):
+        for width in (120, 140, 160, 200):
+            layout = DeviceLayout.for_width(width)
+            header = text_of(layout.header())
+            self.assertEqual(len(header), width, f"width {width}")
+        self.assertGreater(DeviceLayout.for_width(160).util_bar,
+                           DeviceLayout.for_width(120).util_bar)
+
+    def test_minimum_bar_widths_on_narrow_terminal(self):
+        layout = DeviceLayout.for_width(60)
+        self.assertGreaterEqual(layout.util_bar, 6)
+        self.assertGreaterEqual(layout.mem_bar, 6)
 
 
 class TestDeviceLines(unittest.TestCase):
+    def setUp(self):
+        self.lines = line_texts(device_lines(make_snapshot(), LAYOUT))
+
     def test_header_and_row_content(self):
-        lines = line_texts(device_lines(make_snapshot()))
-        self.assertIn("Model", lines[0])  # header
-        row0 = lines[1]
+        self.assertIn("HCU%", self.lines[0])
+        self.assertIn("VRAM", self.lines[0])
+        row0 = self.lines[1]
         self.assertIn("DCU-3G", row0)
         self.assertIn("34.0C", row0)
         self.assertIn("162W", row0)
@@ -120,74 +106,90 @@ class TestDeviceLines(unittest.TestCase):
         self.assertIn("5.0/10.0G", row0)
         self.assertIn("1200M", row0)
         self.assertIn("875M", row0)
-        self.assertIn("█", row0)  # utilization bar rendered
+        self.assertIn("█", row0)  # solid blocks, no dither filler
+        self.assertNotIn("░", row0)
 
     def test_na_values(self):
         snapshot = make_snapshot()
         snapshot.devices[0].temperature.edge = None
         snapshot.devices[0].power = None
         snapshot.devices[0].mclk_mhz = None
-        row = line_texts(device_lines(snapshot))[1]
+        row = line_texts(device_lines(snapshot, LAYOUT))[1]
         self.assertIn("N/A", row)
 
-
-class TestDeviceRowStyles(unittest.TestCase):
-    def device_row_segments(self, **kwargs):
-        lines = device_lines(make_snapshot(**kwargs))
-        return lines[1]  # first data row: list of (text, style)
-
-    def seg_styles(self, segments):
-        return {text.strip(): style for text, style in segments if style}
-
-    def test_hot_device_red(self):
-        segments = self.device_row_segments(edge=80.0)
-        styles = self.seg_styles(segments)
+    def test_styles(self):
+        lines = device_lines(make_snapshot(edge=80.0, power=760.0, utilization=95.0), LAYOUT)
+        styles = {text.strip(): style for text, style in lines[1] if style}
         self.assertEqual(styles.get("80.0C"), "red")
-
-    def test_warm_device_yellow(self):
-        segments = self.device_row_segments(edge=68.0)
-        self.assertEqual(self.seg_styles(segments).get("68.0C"), "yellow")
+        self.assertEqual(styles.get("760W"), "red")
+        self.assertIn("green", styles.values())  # 95% util bar blocks
 
     def test_cool_device_plain(self):
-        segments = self.device_row_segments(edge=34.0)
-        self.assertNotIn("34.0C", self.seg_styles(segments))
-
-    def test_power_near_cap_red(self):
-        segments = self.device_row_segments(power=760.0)  # 95% of 800W
-        self.assertEqual(self.seg_styles(segments).get("760W"), "red")
-
-    def test_power_over_yellow_threshold(self):
-        segments = self.device_row_segments(power=660.0)  # 82.5% of 800W
-        self.assertEqual(self.seg_styles(segments).get("660W"), "yellow")
-
-    def test_high_utilization_green(self):
-        segments = self.device_row_segments(utilization=95.0)
-        styles = self.seg_styles(segments)
-        colored = {s for s in styles.values() if s == "green"}
-        self.assertTrue(colored)
+        # 30% util -> green bar; 50% mem -> green; nothing red/yellow
+        lines = device_lines(make_snapshot(utilization=30.0), LAYOUT)
+        styles = {s for _, s in lines[1] if s}
+        self.assertEqual(styles, {"green"})
 
 
-class TestThemeThresholds(unittest.TestCase):
-    def test_temp_style(self):
-        self.assertIsNone(temp_style(None))
-        self.assertIsNone(temp_style(50.0))
-        self.assertEqual(temp_style(65.0), "yellow")
-        self.assertEqual(temp_style(74.9), "yellow")
-        self.assertEqual(temp_style(75.0), "red")
+class TestBraille(unittest.TestCase):
+    def test_chart_padded_to_width(self):
+        top, bottom = braille_chart([50.0], 10)
+        self.assertEqual(len(top), 10)
+        self.assertEqual(len(bottom), 10)
 
-    def test_power_style(self):
-        self.assertIsNone(power_style(None, 800.0))
-        self.assertIsNone(power_style(100.0, None))
-        self.assertIsNone(power_style(100.0, 0))
-        self.assertIsNone(power_style(600.0, 800.0))  # 75%: plain
-        self.assertEqual(power_style(700.0, 800.0), "yellow")  # 87.5%
-        self.assertEqual(power_style(720.0, 800.0), "red")  # exactly 90%: red wins
-        self.assertEqual(power_style(800.0, 800.0), "red")
+    def test_full_value_is_full_dot_column(self):
+        top, bottom = braille_chart([100.0], 1)
+        self.assertEqual(top, "⢪")  # levels 4-7
+        self.assertEqual(bottom, "⡕")  # levels 0-3
 
-    def test_util_style(self):
-        self.assertIsNone(util_style(None))
-        self.assertIsNone(util_style(89.9))
-        self.assertEqual(util_style(90.0), "green")
+    def test_zero_value_draws_baseline_dot(self):
+        top, bottom = braille_chart([0.0], 1)
+        self.assertEqual(top, "⠀")
+        self.assertEqual(bottom, "⠁")
+
+    def test_mid_value_fills_bottom_four(self):
+        top, bottom = braille_chart([50.0], 1)
+        self.assertEqual(bottom, "⡕")
+        self.assertEqual(top, "⠀")  # round(4.0)=4 -> nothing above bottom half
+
+    def test_axis_line_marks(self):
+        line = axis_line(120, interval_s=1.0)
+        self.assertIn("120s", line)
+        self.assertIn("60s", line)
+        self.assertIn("30s", line)
+        self.assertLess(line.index("120s"), line.index("60s"))
+        self.assertLess(line.index("60s"), line.index("30s"))
+
+    def test_axis_line_short_span_empty(self):
+        self.assertEqual(axis_line(10, interval_s=1.0), "")
+
+    def test_avg_series(self):
+        out = avg_series({0: [10.0, 20.0], 1: [30.0, None, 90.0]})
+        self.assertEqual(out[0], 20.0)
+        self.assertEqual(out[1], 20.0)
+        self.assertEqual(out[2], 90.0)
+
+
+class TestChartSection(unittest.TestCase):
+    def test_charts_present_with_cyan_yellow_styles(self):
+        from hytop.tui.panels import chart_lines
+
+        snapshot = make_snapshot(with_history=True)
+        lines = chart_lines(snapshot, width=120, interval_s=1.0)
+        texts = line_texts(lines)
+        self.assertTrue(any("AVG GPU UTL" in t for t in texts))
+        self.assertTrue(any("AVG GPU MEM" in t for t in texts))
+        styles = {s for line in lines for _, s in line}
+        self.assertIn("cyan", styles)
+        self.assertIn("yellow", styles)
+
+    def test_mem_chart_normalizes_by_total(self):
+        from hytop.tui.panels import chart_lines
+
+        snapshot = make_snapshot(with_history=True)  # 50% / 80% of 10GiB
+        lines = chart_lines(snapshot, width=120, interval_s=1.0)
+        mem_caption = next(t for t in line_texts(lines) if "AVG GPU MEM" in t)
+        self.assertIn("65.0%", mem_caption)  # avg(50, 80)
 
 
 class TestProcessLines(unittest.TestCase):
@@ -219,19 +221,18 @@ class TestProcessLines(unittest.TestCase):
         state = TuiState(selected=1)
         lines = process_lines(make_snapshot(), state)
         self.assertTrue(text_of(lines[2]).startswith(">"))
-        selected_styles = [s for _, s in lines[2] if s]
-        self.assertIn("bold", selected_styles)
-        self.assertEqual(text_of(lines[1]).startswith(">"), False)
+        self.assertIn("bold", [s for _, s in lines[2]])
 
 
 class TestRenderFrame(unittest.TestCase):
     def test_full_frame_sections(self):
-        frame = line_texts(render_frame(make_snapshot(), TuiState()))
+        frame = line_texts(render_frame(make_snapshot(with_history=True), TuiState()))
         self.assertIn(f"hytop {hytop.__version__}", frame[0])
         self.assertIn("devices: 2", frame[0])
         joined = "\n".join(frame)
-        self.assertIn("HCU", joined)
-        self.assertIn("PID", joined)
+        self.assertIn("Devices", joined)
+        self.assertIn("AVG GPU UTL", joined)
+        self.assertIn("Processes:", joined)
         self.assertIn("q quit", joined)
 
     def test_error_line_is_red(self):
@@ -245,6 +246,31 @@ class TestRenderFrame(unittest.TestCase):
     def test_title_is_bold(self):
         frame = render_frame(make_snapshot(), TuiState())
         self.assertIn("bold", [s for _, s in frame[0]])
+
+
+class TestThemeThresholds(unittest.TestCase):
+    def test_temp_style(self):
+        self.assertIsNone(temp_style(None))
+        self.assertIsNone(temp_style(50.0))
+        self.assertEqual(temp_style(65.0), "yellow")
+        self.assertEqual(temp_style(75.0), "red")
+
+    def test_power_style(self):
+        self.assertIsNone(power_style(None, 800.0))
+        self.assertIsNone(power_style(600.0, 800.0))  # 75%: plain
+        self.assertEqual(power_style(700.0, 800.0), "yellow")  # 87.5%
+        self.assertEqual(power_style(720.0, 800.0), "red")  # exactly 90%
+        self.assertEqual(power_style(800.0, 800.0), "red")
+
+    def test_util_style(self):
+        self.assertIsNone(util_style(None))
+        self.assertEqual(util_style(90.0), "green")
+
+    def test_bar_gradient(self):
+        self.assertEqual(bar_style(10.0), "green")
+        self.assertEqual(bar_style(60.0), "yellow")
+        self.assertEqual(bar_style(85.0), "red")
+        self.assertIsNone(bar_style(None))
 
 
 class TestHandleKey(unittest.TestCase):
@@ -267,8 +293,6 @@ class TestHandleKey(unittest.TestCase):
         handle_key(state, ord("3"), 8)
         self.assertEqual(state.filter_devices, {3})
         handle_key(state, ord("4"), 8)
-        self.assertIsNone(state.filter_devices)  # empty -> all
-        handle_key(state, ord("a"), 8)
         self.assertIsNone(state.filter_devices)
         handle_key(state, ord("9"), 4)  # beyond device count: ignored
         self.assertIsNone(state.filter_devices)

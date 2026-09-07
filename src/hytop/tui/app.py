@@ -49,14 +49,15 @@ def run_tui(backend, devices, interval, window_ms, frames=None, stdout=None) -> 
     state = TuiState()
     try:
         if frames is not None:
-            _headless(collector, state, frames, stdout)
+            _headless(collector, state, frames, stdout, interval)
         else:
-            curses.wrapper(_curses_main, collector, state)
+            curses.wrapper(_curses_main, collector, state, interval)
     finally:
         collector.stop()
 
 
-def _headless(collector: Collector, state: TuiState, frames: int, stdout) -> None:
+def _headless(collector: Collector, state: TuiState, frames: int, stdout,
+              interval: float = 1.0) -> None:
     out = stdout if stdout is not None else sys.stdout
     deadline = time.monotonic() + FIRST_SNAPSHOT_TIMEOUT
     while collector.snapshot() is None:
@@ -74,11 +75,12 @@ def _headless(collector: Collector, state: TuiState, frames: int, stdout) -> Non
             last_snapshot = snapshot
             seen += 1
         time.sleep(0.02)
-    for line in render_frame(last_snapshot, state):
+    for line in render_frame(last_snapshot, state, interval_s=interval):
         print(text_of(line), file=out)
 
 
-def _curses_main(stdscr, collector: Collector, state: TuiState) -> None:
+def _curses_main(stdscr, collector: Collector, state: TuiState,
+                 interval: float = 1.0) -> None:
     curses.curs_set(0)
     stdscr.nodelay(True)
     stdscr.timeout(120)
@@ -89,20 +91,22 @@ def _curses_main(stdscr, collector: Collector, state: TuiState) -> None:
         snapshot = collector.snapshot()
         if snapshot is not None and snapshot.timestamp != drawn_timestamp:
             drawn_timestamp = snapshot.timestamp
-            _draw(stdscr, snapshot, state, attrs)
+            _draw(stdscr, snapshot, state, attrs, interval)
         key = stdscr.getch()
         if key == curses.KEY_RESIZE or key == ord("r"):
             if snapshot is not None:
-                _draw(stdscr, snapshot, state, attrs)
+                _draw(stdscr, snapshot, state, attrs, interval)
             continue
         if key != -1:
             if handle_key(state, key, len(snapshot.devices) if snapshot else 0) == "quit":
                 return
 
 
-def _draw(stdscr, snapshot, state: TuiState, attrs: dict[str, int]) -> None:
+def _draw(stdscr, snapshot, state: TuiState, attrs: dict[str, int],
+          interval: float = 1.0) -> None:
     height, width = stdscr.getmaxyx()
-    lines = render_frame(snapshot, state, width=width)[: max(0, height - 1)]
+    lines = render_frame(snapshot, state, width=width,
+                         interval_s=interval)[: max(0, height - 1)]
     stdscr.erase()
     for y, line in enumerate(lines):
         column = 0

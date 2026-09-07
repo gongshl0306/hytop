@@ -8,7 +8,7 @@ this driver (reserved HBM), an alarm would be a false positive.
 
 from __future__ import annotations
 
-STYLE_NAMES = ("bold", "red", "yellow", "green")
+STYLE_NAMES = ("bold", "red", "yellow", "green", "cyan")
 
 TEMP_RED_C = 75.0
 TEMP_YELLOW_C = 65.0
@@ -17,6 +17,10 @@ POWER_RED_FRAC = 0.9
 POWER_YELLOW_FRAC = 0.8
 
 UTIL_GREEN_PCT = 90.0
+
+# bar gradient (nvitop-like): percent -> color of the filled blocks
+BAR_GREEN_BELOW = 60.0
+BAR_YELLOW_BELOW = 85.0
 
 Style = str | None
 
@@ -45,3 +49,14 @@ def util_style(percent: float | None) -> Style:
     if percent is None:
         return None
     return "green" if percent >= UTIL_GREEN_PCT else None
+
+
+def bar_style(percent: float | None) -> Style:
+    """Gradient for filled bar blocks: green -> yellow -> red by percent."""
+    if percent is None:
+        return None
+    if percent >= BAR_YELLOW_BELOW:
+        return "red"
+    if percent >= BAR_GREEN_BELOW:
+        return "yellow"
+    return "green"

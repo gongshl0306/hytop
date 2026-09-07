@@ -1,16 +1,20 @@
 """Frame rendering for the TUI — pure functions, no curses here.
 
 A frame is a list of lines; each line is a list of ``(text, style)``
-segments so colors can attach to individual cells (theme.py decides the
-style, app.py maps it to curses attributes).
+segments. Layout follows the nvitop look: aligned tabular device panel
+with solid gradient bars, aggregate braille charts with time axis, and
+titled sections. All column widths derive from one layout object so the
+header and rows always line up.
 """
 
 from __future__ import annotations
 
 import socket
+import time
 from dataclasses import dataclass
 
 import hytop
+from hytop.tui.braille import avg_series, axis_line, braille_chart
 from hytop.tui.formatter import (
     NA,
     fmt_bytes,
@@ -21,25 +25,14 @@ from hytop.tui.formatter import (
     fmt_temp,
     truncate,
 )
-from hytop.tui.theme import power_style, temp_style, util_style
+from hytop.tui.theme import bar_style, power_style, temp_style
 
 Segment = tuple[str, str | None]
 Line = list[Segment]
 
 SORT_KEYS = ("pid", "vram", "cu", "cpu")
 
-BLOCKS = "▁▂▃▄▅▆▇█"
-BAR_FULL = "█"
-BAR_EMPTY = "░"
-
-UTIL_BAR_WIDTH = 11
-MEM_BAR_WIDTH = 10
-
-DEVICE_HEADER = (
-    f"{'HCU':>3}  {'Model':<10} {'Temp':>6} {'Power':>6} "
-    f"{'HCU%':>{UTIL_BAR_WIDTH + 8}} {'CU%':>6} "
-    f"{'VRAM':>{MEM_BAR_WIDTH + 14}} {'SCLK':>6} {'MCLK':>6}"
-)
+BAR_CAP = "▏"  # thin marker so a 0% bar is still visible
 PROCESS_HEADER = (
     f"{'PID':>7}  {'USER':<8} {'HCU':>3} {'VRAM':>7} {'CU%':>5} "
     f"{'CPU%':>6} {'MEM%':>5}  COMMAND"
@@ -49,6 +42,62 @@ HELP_LINE = (
     "q quit | r refresh | up/down select | p sort PID | m sort VRAM | "
     "c sort CU | u sort CPU | 1-9 filter HCU | a all"
 )
+
+
+@dataclass(frozen=True)
+class DeviceLayout:
+    """Column spans for the device panel; header and rows share it."""
+
+    width: int
+    util_bar: int = 16
+    mem_bar: int = 14
+
+    UTIL_FIXED = 8  # cap + gap + "100.0%"
+    MEM_FIXED = 14  # cap + gap + "136.2/144.0G"
+    TABLE_FIXED = 84  # everything except the two bar cells
+
+    def util_cell_width(self) -> int:
+        return self.util_bar + self.UTIL_FIXED
+
+    def mem_cell_width(self) -> int:
+        return self.mem_bar + self.MEM_FIXED
+
+    @classmethod
+    def for_width(cls, width: int) -> "DeviceLayout":
+        """Size the two bar columns so the table exactly fills `width`.
+
+        The rest of the table has a fixed span; measure it from a probe
+        header instead of hand-maintaining the constant.
+        """
+        base = len(text_of(cls(width=width).header()))
+        extra = width - base
+        util, mem = cls.util_bar, cls.mem_bar
+        if extra >= 0:
+            util += extra // 2
+            mem += extra - extra // 2
+        else:
+            util = max(6, util + extra // 2)
+            mem = max(6, mem + (extra - extra // 2))
+        return cls(width=width, util_bar=util, mem_bar=mem)
+
+    def header(self) -> Line:
+        text = (
+            f"{'HCU':>3}  {'Model':<10}  {'Temp':>6}  {'Power':>7}  "
+            f"{'HCU%':<{self.util_cell_width()}}  {'CU%':>6}  "
+            f"{'VRAM':<{self.mem_cell_width()}}  {'SCLK':>6}  {'MCLK':>6}"
+        )
+        return [(text, "bold")]
+
+    def bar_cell(self, value: float | None, bar_width: int, suffix: str) -> tuple[str, str | None]:
+        """`▏█████     82.1%` — solid gradient blocks, blank filler."""
+        style = bar_style(value)
+        if value is None:
+            blocks = ""
+        else:
+            filled = int(round(min(1.0, max(0.0, value / 100.0)) * bar_width))
+            blocks = "█" * filled
+        text = f"{BAR_CAP}{blocks:<{bar_width}} {suffix}"
+        return text, style
 
 
 @dataclass
@@ -108,100 +157,83 @@ def short_model(name: str | None) -> str:
     return name[:10]
 
 
-def bar(value: float | None, width: int = UTIL_BAR_WIDTH,
-        maximum: float = 100.0) -> str:
-    """`[██████░░░░]` utilization bar; dots when the value is unknown."""
-    if value is None:
-        return f"[{BAR_EMPTY * width}]"
-    if maximum <= 0:
-        maximum = 100.0
-    fraction = min(1.0, max(0.0, value / maximum))
-    filled = int(round(fraction * width))
-    return f"[{BAR_FULL * filled}{BAR_EMPTY * (width - filled)}]"
-
-
-def sparkline(values, width: int = 40) -> str:
-    """Values as a block-character trend line; None/gaps render lowest."""
-    if width <= 0:
-        return ""
-    sampled = list(values) if len(values) <= width else _downsample(values, width)
-    out = []
-    for v in sampled:
-        if v is None or v < 0:
-            level = 0
-        else:
-            level = min(len(BLOCKS) - 1, int(v / 100.0 * len(BLOCKS)))
-        out.append(BLOCKS[level])
-    return "".join(out)
-
-
-def _downsample(values, width: int) -> list:
-    bucket_size = len(values) / width
-    sampled = []
-    for i in range(width):
-        start = int(i * bucket_size)
-        end = max(start + 1, int((i + 1) * bucket_size))
-        bucket = [v for v in values[start:end] if v is not None and v >= 0]
-        sampled.append(sum(bucket) / len(bucket) if bucket else None)
-    return sampled
-
-
-def history_lines(snapshot, spark_width: int = 40, per_line: int = 2) -> list[Line]:
-    """One trend line per device, `per_line` devices per row."""
-    devices = sorted(snapshot.history)
-    if not devices:
-        return []
-    label_width = len(f"HCU{max(devices)}:")
-    lines = []
-    for start in range(0, len(devices), per_line):
-        cells: list[Segment] = []
-        for index in devices[start:start + per_line]:
-            series = snapshot.history[index].utilization.values()
-            cells.append(
-                (f"{f'HCU{index}:':<{label_width}} {sparkline(series, spark_width)}", None)
-            )
-        lines.append(_join_cells(cells))
-    return lines
-
-
-def _join_cells(cells: list[Segment]) -> Line:
-    line: Line = []
-    for i, (text, style) in enumerate(cells):
-        if i:
-            line.append(("  ", None))
-        line.append((text, style))
-    return line
-
-
-def device_lines(snapshot) -> list[Line]:
-    lines: list[Line] = [[(DEVICE_HEADER, "bold")]]
+def device_lines(snapshot, layout: DeviceLayout) -> list[Line]:
+    lines: list[Line] = [layout.header()]
     for index in sorted(snapshot.devices):
         m = snapshot.devices[index]
         info = snapshot.device_info.get(index)
         model = short_model(info.name if info else None)
-        util_cell = f"{bar(m.utilization)} {fmt_percent(m.utilization)}"
+        temp = m.temperature.edge
+
         mem_fraction = None
         if m.memory_used is not None and m.memory_total:
             mem_fraction = m.memory_used / m.memory_total * 100.0
-        mem_cell = f"{bar(mem_fraction, MEM_BAR_WIDTH)} {fmt_mem_pair(m.memory_used, m.memory_total)}"
-        temp = m.temperature.edge
+        util_text, util_style_ = layout.bar_cell(
+            m.utilization, layout.util_bar, f"{fmt_percent(m.utilization):>6}"
+        )
+        mem_text, mem_style_ = layout.bar_cell(
+            mem_fraction, layout.mem_bar,
+            f"{fmt_mem_pair(m.memory_used, m.memory_total):>12}",
+        )
         line: Line = [
-            (f"{index:>3}  {model:<10} ", None),
+            (f"{index:>3}  {model:<10}  ", None),
             (f"{fmt_temp(temp):>6}", temp_style(temp)),
-            (" ", None),
-            (f"{fmt_power(m.power):>6}", power_style(m.power, m.power_cap)),
-            (" ", None),
-            (f"{util_cell:>19}", util_style(m.utilization)),
-            (" ", None),
+            ("  ", None),
+            (f"{fmt_power(m.power):>7}", power_style(m.power, m.power_cap)),
+            ("  ", None),
+            (util_text, util_style_),
+            ("  ", None),
             (f"{fmt_percent(m.cu_utilization):>6}", None),
-            (" ", None),
-            (f"{mem_cell:>24}", None),
-            (" ", None),
+            ("  ", None),
+            (mem_text, mem_style_),
+            ("  ", None),
             (f"{fmt_clock(m.sclk_mhz):>6}", None),
-            (" ", None),
+            ("  ", None),
             (f"{fmt_clock(m.mclk_mhz):>6}", None),
         ]
         lines.append(line)
+    return lines
+
+
+def _mem_fraction_series(history, total: int | None) -> list[float | None]:
+    values = history.memory_used.values() if history else []
+    if not total:
+        return [None] * len(values)
+    return [None if v is None else v / total * 100.0 for v in values]
+
+
+def chart_lines(snapshot, width: int, interval_s: float) -> list[Line]:
+    """Aggregate AVG GPU UTL (cyan) and AVG GPU MEM (yellow) braille charts."""
+    chart_width = min(80, max(24, width - 6))
+    lines: list[Line] = []
+
+    util_series = avg_series(
+        {i: list(h.utilization.values()) for i, h in snapshot.history.items()}
+    )
+    mem_series = avg_series(
+        {
+            i: _mem_fraction_series(h, snapshot.devices[i].memory_total if i in snapshot.devices else None)
+            for i, h in snapshot.history.items()
+        }
+    )
+
+    def caption(label: str, series) -> Line:
+        real = [v for v in series if v is not None]
+        avg = f"{sum(real) / len(real):.1f}%" if real else NA
+        return [(f"{label}: {avg}", "bold")]
+
+    util_top, util_bottom = braille_chart(util_series, chart_width)
+    mem_top, mem_bottom = braille_chart(mem_series, chart_width)
+
+    lines.append(caption("AVG GPU UTL", util_series))
+    lines.append([(util_top, "cyan")])
+    lines.append([(util_bottom, "cyan")])
+    lines.append(caption("AVG GPU MEM", mem_series))
+    lines.append([(mem_top, "yellow")])
+    lines.append([(mem_bottom, "yellow")])
+    axis = axis_line(chart_width, interval_s)
+    if axis:
+        lines.append([(axis, None)])
     return lines
 
 
@@ -247,26 +279,33 @@ def process_lines(snapshot, state: TuiState, width: int = 120) -> list[Line]:
     return lines
 
 
-def render_frame(snapshot, state: TuiState, width: int = 120) -> list[Line]:
+def render_frame(snapshot, state: TuiState, width: int = 120,
+                 interval_s: float = 1.0) -> list[Line]:
     errors = snapshot.errors
+    stamp = time.strftime("%b %d %H:%M:%S", time.localtime(snapshot.timestamp))
     title = (
         f"hytop {hytop.__version__}  host: {socket.gethostname()}  "
-        f"devices: {len(snapshot.devices)}"
-        + (f"  errors: {len(errors)}" if errors else "")
+        f"devices: {len(snapshot.devices)}  {stamp}"
     )
-    host = ""
     if snapshot.cpu_percent is not None:
-        host = (
-            f"host cpu {fmt_percent(snapshot.cpu_percent)}  "
+        title += (
+            f"  host cpu {fmt_percent(snapshot.cpu_percent)}  "
             f"mem {fmt_percent(snapshot.memory_percent)}"
         )
-    frame: list[Line] = [[(f"{title}  {host}".rstrip(), "bold")], [(" ", None)]]
-    frame.extend(device_lines(snapshot))
+    if errors:
+        title += f"  errors: {len(errors)}"
+
+    layout = DeviceLayout.for_width(width)
+    frame: list[Line] = [
+        [(title, "bold")],
+        [(" ", None)],
+        [("Devices", "bold")],
+    ]
+    frame.extend(device_lines(snapshot, layout))
     frame.append([(" ", None)])
-    history = history_lines(snapshot)
-    if history:
-        frame.extend(history)
-        frame.append([(" ", None)])
+    frame.extend(chart_lines(snapshot, width, interval_s))
+    frame.append([(" ", None)])
+    frame.append([("Processes:", "bold")])
     frame.extend(process_lines(snapshot, state, width=width))
     frame.append([(" ", None)])
     if errors:
