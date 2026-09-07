@@ -24,6 +24,11 @@ schema for scripts and agents.
 
 ## Demo
 
+![hytop TUI — HYGON DCU-3G under inference load](docs/images/tui.png)
+
+<details>
+<summary>Character-cell preview</summary>
+
 ```
 ┌──────────────────────────────────────────────────────────────────────────┐
 │ hytop 0.5.2  host: gpu-server02  devices: 8  Sep 07 07:53:54             │
@@ -49,6 +54,7 @@ schema for scripts and agents.
 └──────────────────────────────────────────────────────────────────────────┘
 q quit | r refresh | up/down select | p sort PID | m sort VRAM | c sort CU | u sort CPU | 1-9 filter HCU | a all
 ```
+</details>
 
 Solid gradient bars (green → yellow → red), braille utilization waveforms
 (one character = one second, 8 vertical levels), threshold coloring

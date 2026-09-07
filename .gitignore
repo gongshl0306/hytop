@@ -8,3 +8,4 @@ htmlcov/
 *.swp
 .venv/
 .build-venv/
+docs/hytop.md
