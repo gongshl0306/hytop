@@ -4,10 +4,10 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "hytop"
-version = "0.5.3"
+version = "0.5.4"
 description = "nvitop-style terminal monitor for Hygon DCU (HCU) accelerators - zero-dependency, read-only, with live utilization charts and JSON output"
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.7"
 license = { text = "MIT" }
 authors = [{ name = "hytop contributors" }]
 keywords = ["hygon", "dcu", "hcu", "monitor", "tui", "nvitop", "rocm-smi", "gpu"]

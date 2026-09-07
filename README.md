@@ -2,7 +2,7 @@
 
 [![version](https://img.shields.io/badge/version-0.5.2-blue)](#requirements)
 [![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![python](https://img.shields.io/badge/python-3.8%2B-blue)](https://www.python.org/)
+[![python](https://img.shields.io/badge/python-3.7%2B-blue)](https://www.python.org/)
 [![platform](https://img.shields.io/badge/platform-Linux-lightgrey)](#requirements)
 [![deps](https://img.shields.io/badge/dependencies-0-success)](#requirements)
 
@@ -62,7 +62,7 @@ Hygon DCU servers ship with `hy-smi`, a batch text tool. There was no
 of a cluster tool: **one rsync, no pip, no root install required**.
 
 - **Zero dependencies** — `ctypes` (driver FFI) + `curses` (TUI) + `/proc`
-  parsing. If `python3 ≥ 3.8` runs, hytop runs.
+  parsing. If `python3 ≥ 3.7` runs, hytop runs.
 - **Honest numbers** — every metric is unit-normalized at the backend
   (m°C → °C, µW → W, Hz → MHz); unsupported fields render as `N/A`, never 0.
 - **Validated against `hy-smi`** under real inference load; the host CPU%
@@ -76,7 +76,7 @@ of a cluster tool: **one rsync, no pip, no root install required**.
 
 | What | Why |
 |---|---|
-| Linux, `python3 ≥ 3.8` | standard library only |
+| Linux, `python3 ≥ 3.7` | standard library only |
 | Hygon hyhal driver stack | `/opt/hyhal/lib/librocm_smi64.so` (or `HYTOP_LIBRARY_PATH=/dir`) |
 | Loaded kernel driver | `/dev/kfd`, `/dev/dri/renderD*` present |
 | Read access to device nodes | works as non-root when nodes are group/world-writable (verified) |
