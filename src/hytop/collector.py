@@ -22,7 +22,7 @@ import time
 
 from hytop.host.proc import ProcessSampler, host_memory
 from hytop.host.process import attach_host_info
-from hytop.models.history import DeviceHistory
+from hytop.models.history import DeviceHistory, HostHistory
 from hytop.models.snapshot import SystemSnapshot
 
 
@@ -69,6 +69,7 @@ class Collector:
         self._last_good_processes: list = []
         self._static_cache: dict = {}
         self._history: dict[int, DeviceHistory] = {}
+        self._host_history = HostHistory()
         self._mem_total: int | None = None
 
         self._sampler = ProcessSampler(root=proc_root, clock=clock)
@@ -149,14 +150,19 @@ class Collector:
 
         processes = self._collect_processes(errors)
 
+        host_cpu = self._sampler.host_cpu_percent()
+        host_mem = self._host_memory_percent()
+        self._host_history.append(host_cpu, host_mem)
+
         snapshot = SystemSnapshot(
             timestamp=time.time(),
             device_info=self._static_infos(errors),
             devices=metrics,
             history={index: hist.copy() for index, hist in self._history.items()},
+            host_history=self._host_history.copy(),
             processes=processes,
-            cpu_percent=self._sampler.host_cpu_percent(),
-            memory_percent=self._host_memory_percent(),
+            cpu_percent=host_cpu,
+            memory_percent=host_mem,
             errors=errors,
         )
         with self._lock:

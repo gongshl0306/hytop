@@ -59,6 +59,24 @@ class RingHistory:
 
 
 @dataclass
+class HostHistory:
+    """Host-wide CPU / memory percent series for the charts."""
+
+    cpu_percent: RingHistory = field(default_factory=RingHistory)
+    memory_percent: RingHistory = field(default_factory=RingHistory)
+
+    def append(self, cpu_percent: float | None, memory_percent: float | None) -> None:
+        self.cpu_percent.append(cpu_percent)
+        self.memory_percent.append(memory_percent)
+
+    def copy(self) -> "HostHistory":
+        return HostHistory(
+            cpu_percent=self.cpu_percent.copy(),
+            memory_percent=self.memory_percent.copy(),
+        )
+
+
+@dataclass
 class DeviceHistory:
     """The four series the TUI charts for one device."""
 
@@ -87,3 +105,21 @@ class DeviceHistory:
             power=self.power.copy(),
         )
         return clone
+
+
+@dataclass
+class HostHistory:
+    """Host-wide CPU / memory percent series for the charts."""
+
+    cpu_percent: RingHistory = field(default_factory=RingHistory)
+    memory_percent: RingHistory = field(default_factory=RingHistory)
+
+    def append(self, cpu_percent: float | None, memory_percent: float | None) -> None:
+        self.cpu_percent.append(cpu_percent)
+        self.memory_percent.append(memory_percent)
+
+    def copy(self) -> "HostHistory":
+        return HostHistory(
+            cpu_percent=self.cpu_percent.copy(),
+            memory_percent=self.memory_percent.copy(),
+        )

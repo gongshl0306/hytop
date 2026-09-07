@@ -33,6 +33,8 @@ def build_attrs() -> dict[str, int]:
         "red": curses.COLOR_RED,
         "yellow": curses.COLOR_YELLOW,
         "green": curses.COLOR_GREEN,
+        "cyan": curses.COLOR_CYAN,
+        "magenta": curses.COLOR_MAGENTA,
     }
     for pair_index, (name, fg) in enumerate(colors.items(), start=1):
         try:

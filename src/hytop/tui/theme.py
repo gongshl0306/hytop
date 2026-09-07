@@ -8,7 +8,7 @@ this driver (reserved HBM), an alarm would be a false positive.
 
 from __future__ import annotations
 
-STYLE_NAMES = ("bold", "red", "yellow", "green", "cyan")
+STYLE_NAMES = ("bold", "red", "yellow", "green", "cyan", "magenta")
 
 TEMP_RED_C = 75.0
 TEMP_YELLOW_C = 65.0

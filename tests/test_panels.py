@@ -220,6 +220,26 @@ class TestChartSection(unittest.TestCase):
         self.assertIn("cyan", styles)
         self.assertIn("yellow", styles)
 
+    def test_host_and_gpu_charts_side_by_side(self):
+        from hytop.tui.panels import chart_lines
+
+        snapshot = make_snapshot(with_history=True)
+        snapshot.host_history.append(37.3, 77.2)
+        lines = chart_lines(snapshot, width=120, interval_s=1.0)
+        texts = line_texts(lines)
+        captions = [t for t in texts if ":" in t and ("CPU" in t or "MEM" in t or "UTL" in t)]
+        self.assertTrue(any(t.startswith("CPU: 37.3%") for t in captions))
+        self.assertTrue(any(t.startswith("MEM: 77.2%") for t in captions))
+        self.assertTrue(any("AVG GPU UTL" in t for t in captions))
+        self.assertTrue(any("AVG GPU MEM" in t for t in captions))
+        # host captions on the LEFT, gpu captions on the RIGHT
+        cpu_row = next(t for t in captions if t.startswith("CPU:"))
+        utl_row = next(t for t in captions if "AVG GPU UTL" in t)
+        self.assertLess(cpu_row.index("CPU:"), utl_row.index("AVG GPU UTL"))
+        styles = {sty for line in lines for _, sty in line if sty}
+        self.assertEqual({"cyan", "green", "yellow", "magenta", "bold"},
+                         styles)
+
     def test_mem_chart_normalizes_by_total(self):
         from hytop.tui.panels import chart_lines
 

@@ -202,10 +202,37 @@ def _mem_fraction_series(history, total: int | None) -> list[float | None]:
     return [None if v is None else v / total * 100.0 for v in values]
 
 
+def _chart_block(caption: str, series: list[float | None], width: int,
+                 style: str) -> list[Line]:
+    """Caption + two braille rows, all lines exactly `width` chars wide."""
+    top, bottom = braille_chart(series, width)
+    return [
+        [(caption, "bold")],
+        [(top, style)],
+        [(bottom, style)],
+    ]
+
+
 def chart_lines(snapshot, width: int, interval_s: float) -> list[Line]:
-    """Aggregate AVG GPU UTL (cyan) and AVG GPU MEM (yellow) braille charts."""
-    chart_width = min(80, max(24, width - 6))
-    lines: list[Line] = []
+    """Utilization box: host CPU/MEM charts on the left, GPU charts on the
+    right, side by side (nvitop layout). Time flows left to right; the
+    right edge is now."""
+    gap = 4
+    half = max(12, (width - 4 - gap) // 2)
+
+    host = snapshot.host_history
+    host_cpu = list(host.cpu_percent.values()) if host else []
+    host_mem = list(host.memory_percent.values()) if host else []
+
+    def current(series):
+        real = [v for v in series if v is not None]
+        return f"{real[-1]:.1f}%" if real else NA
+
+    left = [
+        *_chart_block(f"CPU: {current(host_cpu)}", host_cpu, half, "cyan"),
+        *_chart_block(f"MEM: {current(host_mem)}", host_mem, half, "green"),
+        [(axis_line(half, interval_s), None)],
+    ]
 
     util_series = avg_series(
         {i: list(h.utilization.values()) for i, h in snapshot.history.items()}
@@ -217,24 +244,22 @@ def chart_lines(snapshot, width: int, interval_s: float) -> list[Line]:
         }
     )
 
-    def caption(label: str, series) -> Line:
+    def avg_caption(label: str, series):
         real = [v for v in series if v is not None]
-        avg = f"{sum(real) / len(real):.1f}%" if real else NA
-        return [(f"{label}: {avg}", "bold")]
+        return f"{label}: {sum(real) / len(real):.1f}%" if real else f"{label}: {NA}"
 
-    util_top, util_bottom = braille_chart(util_series, chart_width)
-    mem_top, mem_bottom = braille_chart(mem_series, chart_width)
+    right = [
+        *_chart_block(avg_caption("AVG GPU UTL", util_series), util_series, half, "yellow"),
+        *_chart_block(avg_caption("AVG GPU MEM", mem_series), mem_series, half, "magenta"),
+        [(axis_line(half, interval_s), None)],
+    ]
 
-    lines.append(caption("AVG GPU UTL", util_series))
-    lines.append([(util_top, "cyan")])
-    lines.append([(util_bottom, "cyan")])
-    lines.append(caption("AVG GPU MEM", mem_series))
-    lines.append([(mem_top, "yellow")])
-    lines.append([(mem_bottom, "yellow")])
-    axis = axis_line(chart_width, interval_s)
-    if axis:
-        lines.append([(axis, None)])
-    return lines
+    merged: list[Line] = []
+    for left_line, right_line in zip(left, right):
+        left_text = text_of(left_line)
+        pad = max(0, half - len(left_text))
+        merged.append(list(left_line) + [(" " * pad + " " * gap, None)] + list(right_line))
+    return merged
 
 
 def _sort_processes(snapshot, state: TuiState):
