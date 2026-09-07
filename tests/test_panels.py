@@ -6,7 +6,7 @@ from hytop.models.device import DeviceInfo, DeviceMetrics, TemperatureInfo
 from hytop.models.history import DeviceHistory
 from hytop.models.process import HcuProcessInfo, ProcessDeviceUsage
 from hytop.models.snapshot import SystemSnapshot
-from hytop.tui.braille import avg_series, axis_line, braille_chart
+from hytop.tui.braille import avg_series, axis_line, braille_chart, hold_first
 from hytop.tui.panels import (
     DeviceLayout,
     TuiState,
@@ -152,13 +152,27 @@ class TestBraille(unittest.TestCase):
         self.assertEqual(bottom, "⡕")
         self.assertEqual(top, "⠀")  # round(4.0)=4 -> nothing above bottom half
 
+    def test_hold_first_prefills_young_series(self):
+        held = hold_first([66.0], 10)
+        self.assertEqual(held, [66.0] * 10)
+
+    def test_hold_first_ignores_mature_and_empty_series(self):
+        mature = [1.0] * 12
+        self.assertIs(hold_first(mature, 10), mature)
+        self.assertEqual(hold_first([], 10), [])
+        self.assertEqual(hold_first([None, None], 5), [None, None])
+
+    def test_prefilled_chart_has_no_blank_cells(self):
+        top, bottom = braille_chart(hold_first([66.0], 10), 10)
+        self.assertNotIn("⠀", bottom)  # every column lit in the bottom row
+
     def test_axis_line_marks(self):
         line = axis_line(120, interval_s=1.0)
-        self.assertIn("120s", line)
-        self.assertIn("60s", line)
-        self.assertIn("30s", line)
-        self.assertLess(line.index("120s"), line.index("60s"))
-        self.assertLess(line.index("60s"), line.index("30s"))
+        self.assertIn("|120s", line)
+        self.assertIn("|60s", line)
+        self.assertIn("|30s", line)
+        self.assertLess(line.index("|120s"), line.index("|60s"))
+        self.assertLess(line.index("|60s"), line.index("|30s"))
 
     def test_axis_line_short_span_empty(self):
         self.assertEqual(axis_line(10, interval_s=1.0), "")

@@ -70,9 +70,24 @@ def braille_chart(values: list[float | None], width: int) -> tuple[str, str]:
     return "".join(top_chars), "".join(bottom_chars)
 
 
+def hold_first(series: list[float | None], width: int) -> list[float | None]:
+    """Pad a young series backwards with its first value.
+
+    nvitop-style: at startup the chart is a full-width flat line at the
+    first measured level and starts scrolling as samples accumulate,
+    instead of showing a tiny dot cluster on an empty canvas.
+    """
+    if not series or len(series) >= width:
+        return series
+    first = next((v for v in series if v is not None), None)
+    if first is None:
+        return series
+    return [first] * (width - len(series)) + series
+
+
 def axis_line(width: int, interval_s: float = 1.0,
               marks: tuple[int, ...] = (120, 60, 30)) -> str:
-    """Time-ago labels under a chart, e.g. `        120s       60s   30s`."""
+    """Time-ago tick marks under a chart, e.g. `     |120s      |60s  |30s`."""
     if width <= 0 or interval_s <= 0:
         return ""
     span_s = width * interval_s
@@ -80,14 +95,13 @@ def axis_line(width: int, interval_s: float = 1.0,
     for mark in marks:
         if mark <= span_s:
             column = width - int(mark / interval_s)
-            label = f"{mark}s"
-            pieces.append((column, label))
+            pieces.append((column, f"|{mark}s"))
     if not pieces:
         return ""
     line: list[str] = []
     cursor = 0
     for column, label in pieces:
-        start = max(cursor, column - len(label))
+        start = max(cursor, column)
         line.append(" " * (start - cursor))
         line.append(label)
         cursor = start + len(label)
