@@ -88,11 +88,14 @@ def _curses_main(stdscr, collector: Collector, state: TuiState,
 
     drawn_timestamp = None
     while True:
-        snapshot = collector.snapshot()
-        if snapshot is not None and snapshot.timestamp != drawn_timestamp:
-            drawn_timestamp = snapshot.timestamp
-            _draw(stdscr, snapshot, state, attrs, interval)
-        key = stdscr.getch()
+        try:
+            snapshot = collector.snapshot()
+            if snapshot is not None and snapshot.timestamp != drawn_timestamp:
+                drawn_timestamp = snapshot.timestamp
+                _draw(stdscr, snapshot, state, attrs, interval)
+            key = stdscr.getch()
+        except KeyboardInterrupt:
+            return  # Ctrl+C quits exactly like 'q'
         if key == curses.KEY_RESIZE or key == ord("r"):
             if snapshot is not None:
                 _draw(stdscr, snapshot, state, attrs, interval)

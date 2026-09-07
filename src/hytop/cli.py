@@ -31,6 +31,7 @@ from hytop.report import snapshot_to_dict
 EXIT_OK = 0
 EXIT_USAGE = 2
 EXIT_DRIVER = 3
+EXIT_INTERRUPTED = 130  # 128 + SIGINT, the conventional Ctrl+C status
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -239,6 +240,10 @@ def main(argv=None, backend_factory=make_backend, stdout=None, stderr=None) -> i
 
         run_tui(backend, indices, args.interval, args.window_ms, frames=args.frames)
         return EXIT_OK
+    except KeyboardInterrupt:
+        # Ctrl+C anywhere (TUI loop, --once collection) exits tidily
+        print(file=stdout)
+        return EXIT_INTERRUPTED
     finally:
         try:
             backend.shutdown()
