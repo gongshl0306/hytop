@@ -111,12 +111,12 @@ def _draw(stdscr, snapshot, state: TuiState, attrs: dict[str, int],
     for y, line in enumerate(lines):
         column = 0
         for text, style in line:
-            if column >= width - 1:
+            if column >= width:
                 break
-            chunk = text[: max(0, width - 1 - column)]
+            chunk = text[: width - column]
             try:
                 stdscr.addnstr(y, column, chunk, len(chunk), attrs.get(style, 0))
             except curses.error:
-                pass  # writing the screen's last cell raises; safe to ignore
+                pass  # writing the screen's bottom-right cell raises; safe
             column += len(text)
     stdscr.refresh()

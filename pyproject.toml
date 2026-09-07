@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "hytop"
-version = "0.4.0"
+version = "0.4.1"
 description = "nvitop-like monitor for Hygon DCU (HCU) devices"
 readme = "README.md"
 requires-python = ">=3.8"
