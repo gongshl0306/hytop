@@ -3,11 +3,11 @@
 # target: it only needs python3 (>=3.8) and the HCU driver under /opt/hyhal.
 #
 # Usage: ./scripts/deploy.sh [user@]host [target_dir]
-#   ./scripts/deploy.sh x8950_2
-#   ssh x8950_2 PYTHONPATH=/tmp/hytop/src python3 -m hytop --once
+#   ./scripts/deploy.sh user@dcu-host
+#   ssh user@dcu-host PYTHONPATH=/tmp/hytop/src python3 -m hytop --once
 set -euo pipefail
 
-HOST="${1:-x8950_2}"
+HOST="${1:?usage: deploy.sh <user@host> [target_dir]}"
 TARGET="${2:-/tmp/hytop}"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 

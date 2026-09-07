@@ -2,7 +2,7 @@
 
 Ground truth is the driver header shipped on the target machine
 (``/opt/hyhal/include/rocm_smi/rocm_smi.h``, librocm_smi64.so.2.8) plus an
-on-machine smoke test (x8950_2, 8x HYGON DCU-3G). Facts baked in here:
+on-machine smoke test (8x HYGON DCU-3G). Facts baked in here:
 
 - ``RSMI_MAX_NUM_FREQUENCIES`` is **33** (32 normal + 1 sleep slot); a
   32-entry buffer would let the driver write past its end.

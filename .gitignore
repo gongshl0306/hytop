@@ -9,3 +9,5 @@ htmlcov/
 .venv/
 .build-venv/
 docs/hytop.md
+docs/hytop.md
+docs/ffi-notes.md

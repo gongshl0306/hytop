@@ -21,7 +21,7 @@ from hytop.ffi.rsmi import (
 
 
 class TestStructLayouts(unittest.TestCase):
-    """Sizes measured on the target (x8950_2, librocm_smi64.so.2.8).
+    """Sizes measured on the target (librocm_smi64.so.2.8).
 
     A wrong layout here hands the driver a short buffer — silent memory
     corruption, so these asserts are the regression fence.

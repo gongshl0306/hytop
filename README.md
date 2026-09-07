@@ -31,7 +31,7 @@ schema for scripts and agents.
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────┐
-│ hytop 0.5.2  host: gpu-server02  devices: 8  Sep 07 07:53:54             │
+│ hytop 0.5.2  host: dcu-node01  devices: 8  Sep 07 07:53:54             │
 └──────────────────────────────────────────────────────────────────────────┘
 ┌─ Devices ────────────────────────────────────────────────────────────────┐
 │ HCU  Model     Temp   Power  HCU%                             CU%  VRAM  │
@@ -180,8 +180,7 @@ cases) needs no hardware.
   `rsmi_dev_cu_util_get`, 150 ms) rotated across devices: ~2.7 s per full
   sweep on 8 cards; each card shows its latest window until refreshed.
   The driver offers no non-blocking utilization counter — all three
-  candidates return sentinel data (documented in
-  [docs/ffi-notes.md](docs/ffi-notes.md)).
+  candidate APIs return sentinel data on current Hygon drivers.
 - **VRAM** — as reported by `rsmi_dev_memory_usage_get`. ~94 % at idle is
   driver-reserved HBM (matches hy-smi), deliberately not alarmed.
 - **Power** — `rsmi_dev_power_get` (µW → W); cap typically 800 W.
@@ -208,9 +207,9 @@ PYTHONPATH=src python3 -m unittest discover -v   # 193 tests, no hardware needed
 ./bin/hytop --backend mock --frames 3            # headless preview of one frame
 ```
 
-The FFI ground truth (verified signatures, struct sizes, quirks) lives in
-[docs/ffi-notes.md](docs/ffi-notes.md) — read it before touching
-`ffi/rsmi.py`. PRs welcome: bug fixes, new read-only metrics, packaging.
+The FFI ground truth (verified signatures, struct sizes, driver quirks)
+is documented inline in `ffi/rsmi.py` — read it before changing the
+bindings. PRs welcome: bug fixes, new read-only metrics, packaging.
 
 ## License
 

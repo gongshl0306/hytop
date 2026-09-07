@@ -29,7 +29,7 @@ JSON schema。
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────┐
-│ hytop 0.5.2  host: gpu-server02  devices: 8  Sep 07 07:53:54             │
+│ hytop 0.5.2  host: dcu-node01  devices: 8  Sep 07 07:53:54             │
 └──────────────────────────────────────────────────────────────────────────┘
 ┌─ Devices ────────────────────────────────────────────────────────────────┐
 │ HCU  Model     Temp   Power  HCU%                             CU%  VRAM  │
@@ -169,7 +169,7 @@ UI 只做渲染。开发用 MockBackend 可在任何无卡机器上进行；193 
 - **HCU% / CU%** —— 驱动窗口采样（`rsmi_dev_hcu_util_get` /
   `rsmi_dev_cu_util_get`，150ms），跨卡轮转：8 卡约 2.7 秒全量刷新一轮，
   未轮到的卡显示上一次测量值。该驱动没有可用的非阻塞利用率接口——三个候选
-  API 全部返回哨兵数据（见 [docs/ffi-notes.md](docs/ffi-notes.md)）。
+  API 在现有海光驱动上均返回哨兵数据。
 - **VRAM** —— `rsmi_dev_memory_usage_get` 原样报告。空载 ~94% 是驱动预留
   HBM（与 hy-smi 一致），因此刻意不做变色告警。
 - **功耗** —— `rsmi_dev_power_get`（µW→W）；功耗墙通常 800W。
@@ -193,8 +193,8 @@ PYTHONPATH=src python3 -m unittest discover -v   # 193 个测试，无需真卡
 ./bin/hytop --backend mock --frames 3            # 无头预览一帧
 ```
 
-FFI 的事实依据（已验证的签名、结构体尺寸、驱动怪癖）都在
-[docs/ffi-notes.md](docs/ffi-notes.md) —— 动 `ffi/rsmi.py` 之前先读它。
+FFI 的事实依据（已验证的签名、结构体尺寸、驱动怪癖）以
+内联注释的形式写在 `ffi/rsmi.py` 中 —— 修改绑定前请先阅读。
 欢迎 PR：bug 修复、新的只读指标、打包改进。
 
 ## 许可证
