@@ -27,13 +27,11 @@ class TestCandidateDirs(unittest.TestCase):
 
 class TestSearchCandidates(unittest.TestCase):
     def test_returns_first_existing(self):
-        from pathlib import Path
-
         with tempfile.TemporaryDirectory() as d1, tempfile.TemporaryDirectory() as d2:
-            fake = Path(d2) / "librocm_smi64.so"
-            fake.write_text("")
+            fake = os.path.join(d2, "librocm_smi64.so")
+            open(fake, "w").close()
             hit = search_candidates(["librocm_smi64.so"], [d1, d2])
-            self.assertEqual(hit, str(fake))
+            self.assertEqual(hit, fake)
 
     def test_none_when_missing_everywhere(self):
         self.assertIsNone(search_candidates(["libnope.so"], ["/no/such/dir"]))

@@ -67,7 +67,7 @@ bordered panels.
 (see [Requirements](#requirements)):
 
 ```bash
-pip install https://github.com/gongshl0306/hytop/releases/download/v0.5.4/hytop-0.5.4-py3-none-any.whl
+pip install https://github.com/gongshl0306/hytop/releases/download/v0.6.0/hytop-0.6.0-py3-none-any.whl
 hytop --once
 ```
 
@@ -77,7 +77,7 @@ CPython, so the system interpreter does not matter:
 ```bash
 curl -LsSf https://astral.sh/uv/install.sh | sh
 uv python install 3.12
-uv tool install --python 3.12 https://github.com/gongshl0306/hytop/releases/download/v0.5.4/hytop-0.5.4-py3-none-any.whl
+uv tool install --python 3.12 https://github.com/gongshl0306/hytop/releases/download/v0.6.0/hytop-0.6.0-py3-none-any.whl
 hytop
 ```
 
@@ -218,6 +218,43 @@ cases) needs no hardware.
 - No PCIe throughput, ECC, Hylink topology, CSV logging, or container
   attribution yet (the PCIe fields are already probed and documented).
 - Verified on BW1100-class hardware; other generations may show `N/A`.
+
+## Python API
+
+hytop also ships a small read-only Python API (nvitop-style facade):
+
+```python
+from hytop import Device, snapshot
+
+Device.count()                       # 8
+dev = Device(0)
+dev.name                             # 'HYGON DCU-3G'
+dev.memory_used_human()              # '136.2G'
+
+m = dev.snapshot()                   # windowed HCU%/CU% + instant metrics
+m.power, m.temperature.edge          # 323.0, 44.0
+
+for proc in dev.processes():         # processes on THIS device
+    print(proc.pid, proc.username, proc.vram_used_human(0))
+
+snap = snapshot()                    # whole-system SystemSnapshot
+```
+
+A background collector with callbacks is available for custom integrations
+(logging, dashboards, agent loops):
+
+```python
+from hytop import Collector, MockBackend
+
+def on_collect(snap):
+    print(snap.timestamp, snap.devices[0].utilization)
+    return True   # return False to stop
+
+Collector(MockBackend(), interval=1.0, on_collect=on_collect).start()
+```
+
+No hardware? `Device.use_mock()` (or `--backend mock`) switches to a
+deterministic simulator — the API behaves identically.
 
 ## Contributing
 

@@ -1,11 +1,37 @@
 """hytop — an nvitop-like monitor for Hygon DCU (HCU) devices.
 
 Read-only monitoring: device enumeration, live metrics with bars and
-history sparklines, process table, JSON output. No control operations.
+history charts, process table, JSON output — plus a small read-only
+Python API (see hytop.api). No control operations.
 """
 
 from __future__ import annotations
 
-__version__ = "0.5.4"
+from hytop.api import (
+    Device,
+    HcuProcess,
+    processes,
+    shutdown,
+    snapshot,
+    use_mock,
+)
+from hytop.backends.mock import MockBackend
+from hytop.backends.native import NativeBackend
+from hytop.collector import Collector
+from hytop.models.snapshot import SystemSnapshot
 
-__all__ = ["__version__"]
+__version__ = "0.6.0"
+
+__all__ = [
+    "__version__",
+    "Device",
+    "HcuProcess",
+    "processes",
+    "snapshot",
+    "shutdown",
+    "use_mock",
+    "Collector",
+    "SystemSnapshot",
+    "NativeBackend",
+    "MockBackend",
+]

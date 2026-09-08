@@ -63,7 +63,7 @@ q 退出 | r 重绘 | ↑/↓ 选择 | p 按 PID 排序 | m 按 VRAM | c 按 CU%
 （见[环境要求](#环境要求)）：
 
 ```bash
-pip install https://github.com/gongshl0306/hytop/releases/download/v0.5.4/hytop-0.5.4-py3-none-any.whl
+pip install https://github.com/gongshl0306/hytop/releases/download/v0.6.0/hytop-0.6.0-py3-none-any.whl
 hytop --once
 ```
 
@@ -73,7 +73,7 @@ hytop --once
 ```bash
 curl -LsSf https://astral.sh/uv/install.sh | sh
 uv python install 3.12
-uv tool install --python 3.12 https://github.com/gongshl0306/hytop/releases/download/v0.5.4/hytop-0.5.4-py3-none-any.whl
+uv tool install --python 3.12 https://github.com/gongshl0306/hytop/releases/download/v0.6.0/hytop-0.6.0-py3-none-any.whl
 hytop
 ```
 
@@ -204,6 +204,42 @@ UI 只做渲染。开发用 MockBackend 可在任何无卡机器上进行；193 
 - 8 卡时 HCU%/CU% 最多滞后 ~2.7 秒（阻塞窗口采样是该驱动唯一真实来源）。
 - 尚无 PCIe 吞吐、ECC、Hylink 拓扑、CSV 落盘、容器感知（PCIe 字段已探明可用）。
 - 在 BW1100 代硬件上验证；其他代际可能部分指标 N/A。
+
+## Python API
+
+hytop 同时提供一套小型只读 Python API（nvitop 风格门面）：
+
+```python
+from hytop import Device, snapshot
+
+Device.count()                       # 8
+dev = Device(0)
+dev.name                             # 'HYGON DCU-3G'
+dev.memory_used_human()              # '136.2G'
+
+m = dev.snapshot()                   # 窗口采样 HCU%/CU% + 全部瞬时指标
+m.power, m.temperature.edge          # 323.0, 44.0
+
+for proc in dev.processes():         # 这张卡上的进程
+    print(proc.pid, proc.username, proc.vram_used_human(0))
+
+snap = snapshot()                    # 全机 SystemSnapshot
+```
+
+后台采集器支持回调，便于自定义集成（日志、看板、Agent 循环）：
+
+```python
+from hytop import Collector, MockBackend
+
+def on_collect(snap):
+    print(snap.timestamp, snap.devices[0].utilization)
+    return True   # 返回 False 即停止
+
+Collector(MockBackend(), interval=1.0, on_collect=on_collect).start()
+```
+
+没有真卡？`Device.use_mock()`（或 `--backend mock`）切换到确定性模拟器，
+API 行为完全一致。
 
 ## 参与
 

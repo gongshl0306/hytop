@@ -51,21 +51,16 @@ class Collector:
         interval: float = 1.0,
         window_ms: int = 150,
         devices: list[int] | None = None,
-        window_devices_per_tick: int = 2,
+        window_devices_per_tick: int = 3,
         proc_root: str = "/proc",
         clock=time.monotonic,
-        on_collect=None,
     ):
-        """``on_collect``: optional callable invoked with each finished
-        snapshot; returning ``False`` stops the collector (nvitop's
-        ``collect_in_background`` style)."""
         self._backend = backend
         self._interval = interval
         self._window_ms = window_ms
         self._window_devices_per_tick = max(1, window_devices_per_tick)
         self._proc_root = proc_root
         self._clock = clock
-        self._on_collect = on_collect
 
         self._indices: list[int] = list(devices) if devices else []
         self._rotation_index = 0
@@ -115,18 +110,8 @@ class Collector:
                 self._collect_once()
             except Exception as err:  # never let the thread die silently
                 self._record_emergency(err)
-            if self._on_collect is not None and self._snapshot_ready():
-                try:
-                    if self._on_collect(self.snapshot()) is False:
-                        self._stop_event.set()  # callback requests shutdown
-                except Exception as err:
-                    self._record_emergency(err)
             elapsed = self._clock() - started
             self._stop_event.wait(max(0.0, self._interval - elapsed))
-
-    def _snapshot_ready(self) -> bool:
-        with self._lock:
-            return self._snapshot is not None
 
     def _record_emergency(self, err: Exception) -> None:
         previous = self._snapshot
