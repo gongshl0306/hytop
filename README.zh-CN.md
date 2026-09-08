@@ -57,6 +57,46 @@ q 退出 | r 重绘 | ↑/↓ 选择 | p 按 PID 排序 | m 按 VRAM | c 按 CU%
 实心渐变条形图（绿→黄→红）、盲文利用率波形（一个字符 = 一秒，纵向 8 级）、
 阈值变色（温度 ≥65°C 黄 / ≥75°C 红，功耗 ≥80%/90% 功耗墙变色），面板盒分区。
 
+## 快速开始
+
+**pip** —— 机器上有 python ≥ 3.7 且已装海光 hyhal 驱动
+（见[环境要求](#环境要求)）：
+
+```bash
+pip install https://github.com/gongshl0306/hytop/releases/download/v0.5.4/hytop-0.5.4-py3-none-any.whl
+hytop --once
+```
+
+**uv** —— 机器 Python 版本太旧时。uv 自带独立 CPython 下载，
+系统 Python 是什么版本无所谓：
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+uv python install 3.12
+uv tool install --python 3.12 https://github.com/gongshl0306/hytop/releases/download/v0.5.4/hytop-0.5.4-py3-none-any.whl
+hytop
+```
+
+**集群部署** —— 目标机完全不需要 pip（一次 rsync）：
+
+```bash
+./scripts/deploy.sh user@host /opt/hytop
+ssh user@host 'ln -sfn /opt/hytop/bin/hytop /usr/local/bin/hytop'
+
+# 之后在任意 DCU 节点、任意用户：
+hytop                 # 交互式 TUI
+hytop --once          # 打印一次文本快照
+hytop --json          # 打印一次 JSON 快照（schema 稳定，null = 不支持）
+```
+
+**源码直跑 / 免安装：**
+
+```bash
+PYTHONPATH=src python3 -m hytop --once     # 在 DCU 节点上
+./bin/hytop --backend mock                 # 任意机器：确定性 8 卡模拟
+pip install .                              # 可选：正式安装（含命令行入口）
+```
+
 ## 为什么做这个
 
 海光 DCU 服务器自带 `hy-smi`，那是一个一次性文本工具；DCU 世界里没有 `nvitop`。
@@ -84,27 +124,6 @@ hytop 补上这个空缺，同时保留集群工具的部署方式：**一次 rs
 使用同一 RSMI 接口的其他代际海光 DCU 应当可用；不支持的指标自动降级为 `N/A`。
 不适用于 NVIDIA GPU；AMD 原生 ROCm 的 API 同源但未适配未测试。没有驱动的机器上
 会得到清晰可操作的报错（列出搜索路径与建议），而不是 traceback。
-
-## 快速开始
-
-```bash
-# 部署到 DCU 节点（仅 rsync——目标机不安装任何东西）
-./scripts/deploy.sh user@host /opt/hytop
-ssh user@host 'ln -sfn /opt/hytop/bin/hytop /usr/local/bin/hytop'
-
-# 之后在任意 DCU 节点、任意用户：
-hytop                 # 交互式 TUI
-hytop --once          # 打印一次文本快照
-hytop --json          # 打印一次 JSON 快照（schema 稳定，null = 不支持）
-```
-
-或免安装直接跑：
-
-```bash
-PYTHONPATH=src python3 -m hytop --once     # 在 DCU 节点上
-./bin/hytop --backend mock                 # 任意机器：确定性 8 卡模拟
-pip install .                              # 可选：正式安装（含命令行入口）
-```
 
 ## 命令行
 

@@ -61,6 +61,46 @@ Solid gradient bars (green → yellow → red), braille utilization waveforms
 (temperature ≥ 65 °C yellow / ≥ 75 °C red, power ≥ 80 %/90 % of cap), and
 bordered panels.
 
+## Quick start
+
+**pip** — on a machine with python ≥ 3.7 and the Hygon hyhal driver
+(see [Requirements](#requirements)):
+
+```bash
+pip install https://github.com/gongshl0306/hytop/releases/download/v0.5.4/hytop-0.5.4-py3-none-any.whl
+hytop --once
+```
+
+**uv** — when the machine's Python is too old. uv ships its own standalone
+CPython, so the system interpreter does not matter:
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+uv python install 3.12
+uv tool install --python 3.12 https://github.com/gongshl0306/hytop/releases/download/v0.5.4/hytop-0.5.4-py3-none-any.whl
+hytop
+```
+
+**Cluster deploy** — no pip on the target at all (single rsync):
+
+```bash
+./scripts/deploy.sh user@host /opt/hytop
+ssh user@host 'ln -sfn /opt/hytop/bin/hytop /usr/local/bin/hytop'
+
+# then, on any DCU node, any user:
+hytop                 # live TUI
+hytop --once          # one text snapshot
+hytop --json          # one JSON snapshot (stable schema, null = N/A)
+```
+
+**From source / without installing:**
+
+```bash
+PYTHONPATH=src python3 -m hytop --once     # on a DCU node
+./bin/hytop --backend mock                 # anywhere: deterministic 8-GPU simulation
+pip install .                              # optional: proper install (console script)
+```
+
 ## Why
 
 Hygon DCU servers ship with `hy-smi`, a batch text tool. There was no
@@ -91,27 +131,6 @@ Other Hygon DCU generations that ship the same RSMI interface should work;
 unsupported metrics degrade to `N/A`. Not applicable to NVIDIA GPUs; AMD
 ROCm shares API ancestry but is untested. Without a driver you get a clean,
 actionable error (searched paths + hints), never a traceback.
-
-## Quick start
-
-```bash
-# deploy to a DCU node (rsync only — nothing is installed on the target)
-./scripts/deploy.sh user@host /opt/hytop
-ssh user@host 'ln -sfn /opt/hytop/bin/hytop /usr/local/bin/hytop'
-
-# then, on any DCU node, any user:
-hytop                 # live TUI
-hytop --once          # one text snapshot
-hytop --json          # one JSON snapshot (stable schema, null = N/A)
-```
-
-Or from source without installing:
-
-```bash
-PYTHONPATH=src python3 -m hytop --once     # on a DCU node
-./bin/hytop --backend mock                 # anywhere: deterministic 8-GPU simulation
-pip install .                              # optional: proper install (console script)
-```
 
 ## CLI
 
