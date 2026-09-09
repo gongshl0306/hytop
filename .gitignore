@@ -8,6 +8,6 @@ htmlcov/
 *.swp
 .venv/
 .build-venv/
-docs/hytop.md
-docs/hytop.md
+docs/dcutop.md
+docs/dcutop.md
 docs/ffi-notes.md

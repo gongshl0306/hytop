@@ -1,6 +1,6 @@
 import unittest
 
-from hytop.models.history import DEFAULT_MAXLEN, DeviceHistory, RingHistory
+from dcutop.models.history import DEFAULT_MAXLEN, DeviceHistory, RingHistory
 
 
 class TestRingHistory(unittest.TestCase):

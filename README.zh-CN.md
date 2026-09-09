@@ -1,4 +1,4 @@
-# hytop
+# dcutop
 
 [![version](https://img.shields.io/badge/version-0.5.2-blue)](#环境要求)
 [![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
@@ -11,7 +11,7 @@
 **面向海光 DCU（HCU）加速卡的 nvitop 风格终端监控工具** —— 只读监控、零第三方依赖，
 实时利用率条形图、盲文历史波形、进程表，以及稳定的 JSON 输出。
 
-hytop 与 `hy-smi` 走同一条路：通过 `ctypes` 调用 `librocm_smi64.so` 的标准
+dcutop 与 `hy-smi` 走同一条路：通过 `ctypes` 调用 `librocm_smi64.so` 的标准
 `rsmi_*` 接口。不同的是，它把这些数据变成了一个交互式的 top 风格界面：设备面板、
 主机与 GPU 利用率波形、按卡细分的进程表、阈值变色，以及可供脚本/Agent 消费的
 JSON schema。
@@ -22,14 +22,14 @@ JSON schema。
 
 ## 界面预览
 
-![hytop TUI —— 推理负载下的 8 卡 DCU-3G](docs/images/tui.png)
+![dcutop TUI —— 推理负载下的 8 卡 DCU-3G](docs/images/tui.png)
 
 <details>
 <summary>字符版预览</summary>
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────┐
-│ hytop 0.5.2  host: dcu-node01  devices: 8  Sep 07 07:53:54             │
+│ dcutop 0.5.2  host: dcu-node01  devices: 8  Sep 07 07:53:54             │
 └──────────────────────────────────────────────────────────────────────────┘
 ┌─ Devices ────────────────────────────────────────────────────────────────┐
 │ HCU  Model     Temp   Power  HCU%                             CU%  VRAM  │
@@ -63,8 +63,8 @@ q 退出 | r 重绘 | ↑/↓ 选择 | p 按 PID 排序 | m 按 VRAM | c 按 CU%
 （见[环境要求](#环境要求)）：
 
 ```bash
-pip install https://github.com/gongshl0306/hytop/releases/download/v0.6.0/hytop-0.6.0-py3-none-any.whl
-hytop --once
+pip install https://github.com/gongshl0306/dcutop/releases/download/v0.7.0/dcutop-0.7.0-py3-none-any.whl
+dcutop --once
 ```
 
 **uv** —— 机器 Python 版本太旧时。uv 自带独立 CPython 下载，
@@ -73,37 +73,37 @@ hytop --once
 ```bash
 curl -LsSf https://astral.sh/uv/install.sh | sh
 uv python install 3.12
-uv tool install --python 3.12 https://github.com/gongshl0306/hytop/releases/download/v0.6.0/hytop-0.6.0-py3-none-any.whl
-hytop
+uv tool install --python 3.12 https://github.com/gongshl0306/dcutop/releases/download/v0.7.0/dcutop-0.7.0-py3-none-any.whl
+dcutop
 ```
 
 **集群部署** —— 目标机完全不需要 pip（一次 rsync）：
 
 ```bash
-./scripts/deploy.sh user@host /opt/hytop
-ssh user@host 'ln -sfn /opt/hytop/bin/hytop /usr/local/bin/hytop'
+./scripts/deploy.sh user@host /opt/dcutop
+ssh user@host 'ln -sfn /opt/dcutop/bin/dcutop /usr/local/bin/dcutop'
 
 # 之后在任意 DCU 节点、任意用户：
-hytop                 # 交互式 TUI
-hytop --once          # 打印一次文本快照
-hytop --json          # 打印一次 JSON 快照（schema 稳定，null = 不支持）
+dcutop                 # 交互式 TUI
+dcutop --once          # 打印一次文本快照
+dcutop --json          # 打印一次 JSON 快照（schema 稳定，null = 不支持）
 ```
 
 **源码直跑 / 免安装：**
 
 ```bash
-PYTHONPATH=src python3 -m hytop --once     # 在 DCU 节点上
-./bin/hytop --backend mock                 # 任意机器：确定性 8 卡模拟
+PYTHONPATH=src python3 -m dcutop --once     # 在 DCU 节点上
+./bin/dcutop --backend mock                 # 任意机器：确定性 8 卡模拟
 pip install .                              # 可选：正式安装（含命令行入口）
 ```
 
 ## 为什么做这个
 
 海光 DCU 服务器自带 `hy-smi`，那是一个一次性文本工具；DCU 世界里没有 `nvitop`。
-hytop 补上这个空缺，同时保留集群工具的部署方式：**一次 rsync，不用 pip，无需 root 安装**。
+dcutop 补上这个空缺，同时保留集群工具的部署方式：**一次 rsync，不用 pip，无需 root 安装**。
 
 - **零依赖** —— `ctypes`（驱动 FFI）+ `curses`（TUI）+ `/proc` 解析。
-  只要 `python3 ≥ 3.7` 能跑，hytop 就能跑。
+  只要 `python3 ≥ 3.7` 能跑，dcutop 就能跑。
 - **数字诚实** —— 所有指标在后端完成单位换算（m°C→°C、µW→W、Hz→MHz），
   不支持的字段显示 `N/A`，绝不用 0 冒充。
 - **与 `hy-smi` 对拍验证** —— 真实推理负载下逐卡对比；主机 CPU% 与 `top` 一致
@@ -117,7 +117,7 @@ hytop 补上这个空缺，同时保留集群工具的部署方式：**一次 rs
 | 条件 | 说明 |
 |---|---|
 | Linux，`python3 ≥ 3.7` | 仅标准库 |
-| 海光 hyhal 驱动栈 | `/opt/hyhal/lib/librocm_smi64.so`（或 `HYTOP_LIBRARY_PATH=/目录`） |
+| 海光 hyhal 驱动栈 | `/opt/hyhal/lib/librocm_smi64.so`（或 `DCUTOP_LIBRARY_PATH=/目录`） |
 | 内核驱动已加载 | 存在 `/dev/kfd`、`/dev/dri/renderD*` |
 | 设备节点可读 | 权限开放时非 root 可用（已验证） |
 
@@ -145,7 +145,7 @@ TUI 按键：`q` 退出 · `r` 重绘 · `↑/↓` 选择 · `p/m/c/u` 按 PID/V
 
 ```json
 {
-  "hytop_version": "0.5.2",
+  "dcutop_version": "0.5.2",
   "timestamp": 1788489077.1,
   "host": {"cpu_percent": 2.2, "memory_percent": 8.2},
   "devices": [{
@@ -207,10 +207,10 @@ UI 只做渲染。开发用 MockBackend 可在任何无卡机器上进行；193 
 
 ## Python API
 
-hytop 同时提供一套小型只读 Python API（nvitop 风格门面）：
+dcutop 同时提供一套小型只读 Python API（nvitop 风格门面）：
 
 ```python
-from hytop import Device, snapshot
+from dcutop import Device, snapshot
 
 Device.count()                       # 8
 dev = Device(0)
@@ -229,7 +229,7 @@ snap = snapshot()                    # 全机 SystemSnapshot
 后台采集器支持回调，便于自定义集成（日志、看板、Agent 循环）：
 
 ```python
-from hytop import Collector, MockBackend
+from dcutop import Collector, MockBackend
 
 def on_collect(snap):
     print(snap.timestamp, snap.devices[0].utilization)
@@ -245,7 +245,7 @@ API 行为完全一致。
 
 ```bash
 PYTHONPATH=src python3 -m unittest discover -v   # 193 个测试，无需真卡
-./bin/hytop --backend mock --frames 3            # 无头预览一帧
+./bin/dcutop --backend mock --frames 3            # 无头预览一帧
 ```
 
 FFI 的事实依据（已验证的签名、结构体尺寸、驱动怪癖）以

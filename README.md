@@ -1,4 +1,4 @@
-# hytop
+# dcutop
 
 [![version](https://img.shields.io/badge/version-0.5.2-blue)](#requirements)
 [![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
@@ -12,7 +12,7 @@ An **nvitop-style terminal monitor for Hygon DCU (HCU) accelerators** —
 read-only, zero third-party dependencies, with live utilization bars,
 braille history charts, a process table, and JSON output.
 
-hytop talks to the HCU driver the same way `hy-smi` does — through the
+dcutop talks to the HCU driver the same way `hy-smi` does — through the
 standard `rsmi_*` interface of `librocm_smi64.so` via `ctypes` — but turns
 it into an interactive, top-like view: device panel, host & GPU utilization
 waveforms, per-device process table, threshold coloring, and a stable JSON
@@ -24,14 +24,14 @@ schema for scripts and agents.
 
 ## Demo
 
-![hytop TUI — HYGON DCU-3G under inference load](docs/images/tui.png)
+![dcutop TUI — HYGON DCU-3G under inference load](docs/images/tui.png)
 
 <details>
 <summary>Character-cell preview</summary>
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────┐
-│ hytop 0.5.2  host: dcu-node01  devices: 8  Sep 07 07:53:54             │
+│ dcutop 0.5.2  host: dcu-node01  devices: 8  Sep 07 07:53:54             │
 └──────────────────────────────────────────────────────────────────────────┘
 ┌─ Devices ────────────────────────────────────────────────────────────────┐
 │ HCU  Model     Temp   Power  HCU%                             CU%  VRAM  │
@@ -67,8 +67,8 @@ bordered panels.
 (see [Requirements](#requirements)):
 
 ```bash
-pip install https://github.com/gongshl0306/hytop/releases/download/v0.6.0/hytop-0.6.0-py3-none-any.whl
-hytop --once
+pip install https://github.com/gongshl0306/dcutop/releases/download/v0.7.0/dcutop-0.7.0-py3-none-any.whl
+dcutop --once
 ```
 
 **uv** — when the machine's Python is too old. uv ships its own standalone
@@ -77,38 +77,38 @@ CPython, so the system interpreter does not matter:
 ```bash
 curl -LsSf https://astral.sh/uv/install.sh | sh
 uv python install 3.12
-uv tool install --python 3.12 https://github.com/gongshl0306/hytop/releases/download/v0.6.0/hytop-0.6.0-py3-none-any.whl
-hytop
+uv tool install --python 3.12 https://github.com/gongshl0306/dcutop/releases/download/v0.7.0/dcutop-0.7.0-py3-none-any.whl
+dcutop
 ```
 
 **Cluster deploy** — no pip on the target at all (single rsync):
 
 ```bash
-./scripts/deploy.sh user@host /opt/hytop
-ssh user@host 'ln -sfn /opt/hytop/bin/hytop /usr/local/bin/hytop'
+./scripts/deploy.sh user@host /opt/dcutop
+ssh user@host 'ln -sfn /opt/dcutop/bin/dcutop /usr/local/bin/dcutop'
 
 # then, on any DCU node, any user:
-hytop                 # live TUI
-hytop --once          # one text snapshot
-hytop --json          # one JSON snapshot (stable schema, null = N/A)
+dcutop                 # live TUI
+dcutop --once          # one text snapshot
+dcutop --json          # one JSON snapshot (stable schema, null = N/A)
 ```
 
 **From source / without installing:**
 
 ```bash
-PYTHONPATH=src python3 -m hytop --once     # on a DCU node
-./bin/hytop --backend mock                 # anywhere: deterministic 8-GPU simulation
+PYTHONPATH=src python3 -m dcutop --once     # on a DCU node
+./bin/dcutop --backend mock                 # anywhere: deterministic 8-GPU simulation
 pip install .                              # optional: proper install (console script)
 ```
 
 ## Why
 
 Hygon DCU servers ship with `hy-smi`, a batch text tool. There was no
-`nvitop` for them. hytop fills that gap while keeping the deployment story
+`nvitop` for them. dcutop fills that gap while keeping the deployment story
 of a cluster tool: **one rsync, no pip, no root install required**.
 
 - **Zero dependencies** — `ctypes` (driver FFI) + `curses` (TUI) + `/proc`
-  parsing. If `python3 ≥ 3.7` runs, hytop runs.
+  parsing. If `python3 ≥ 3.7` runs, dcutop runs.
 - **Honest numbers** — every metric is unit-normalized at the backend
   (m°C → °C, µW → W, Hz → MHz); unsupported fields render as `N/A`, never 0.
 - **Validated against `hy-smi`** under real inference load; the host CPU%
@@ -123,7 +123,7 @@ of a cluster tool: **one rsync, no pip, no root install required**.
 | What | Why |
 |---|---|
 | Linux, `python3 ≥ 3.7` | standard library only |
-| Hygon hyhal driver stack | `/opt/hyhal/lib/librocm_smi64.so` (or `HYTOP_LIBRARY_PATH=/dir`) |
+| Hygon hyhal driver stack | `/opt/hyhal/lib/librocm_smi64.so` (or `DCUTOP_LIBRARY_PATH=/dir`) |
 | Loaded kernel driver | `/dev/kfd`, `/dev/dri/renderD*` present |
 | Read access to device nodes | works as non-root when nodes are group/world-writable (verified) |
 
@@ -152,7 +152,7 @@ PID/VRAM/CU%/CPU% · `1-9` filter HCUs · `a` show all.
 
 ```json
 {
-  "hytop_version": "0.5.2",
+  "dcutop_version": "0.5.2",
   "timestamp": 1788489077.1,
   "host": {"cpu_percent": 2.2, "memory_percent": 8.2},
   "devices": [{
@@ -221,10 +221,10 @@ cases) needs no hardware.
 
 ## Python API
 
-hytop also ships a small read-only Python API (nvitop-style facade):
+dcutop also ships a small read-only Python API (nvitop-style facade):
 
 ```python
-from hytop import Device, snapshot
+from dcutop import Device, snapshot
 
 Device.count()                       # 8
 dev = Device(0)
@@ -244,7 +244,7 @@ A background collector with callbacks is available for custom integrations
 (logging, dashboards, agent loops):
 
 ```python
-from hytop import Collector, MockBackend
+from dcutop import Collector, MockBackend
 
 def on_collect(snap):
     print(snap.timestamp, snap.devices[0].utilization)
@@ -260,7 +260,7 @@ deterministic simulator — the API behaves identically.
 
 ```bash
 PYTHONPATH=src python3 -m unittest discover -v   # 193 tests, no hardware needed
-./bin/hytop --backend mock --frames 3            # headless preview of one frame
+./bin/dcutop --backend mock --frames 3            # headless preview of one frame
 ```
 
 The FFI ground truth (verified signatures, struct sizes, driver quirks)

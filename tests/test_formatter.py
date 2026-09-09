@@ -1,6 +1,6 @@
 import unittest
 
-from hytop.tui.formatter import (
+from dcutop.tui.formatter import (
     NA,
     fmt_bytes,
     fmt_clock,

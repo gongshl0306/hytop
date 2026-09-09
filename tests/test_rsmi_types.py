@@ -1,8 +1,8 @@
 import ctypes
 import unittest
 
-from hytop.ffi.errors import RsmiCallError
-from hytop.ffi.rsmi import (
+from dcutop.ffi.errors import RsmiCallError
+from dcutop.ffi.rsmi import (
     RSMI_CLK_TYPE_MEM,
     RSMI_CLK_TYPE_SYS,
     RSMI_MAX_NUM_FREQUENCIES,
@@ -100,10 +100,10 @@ class TestRsmiCallError(unittest.TestCase):
         self.assertEqual(err.code, 7)
         self.assertEqual(str(err), "rsmi_dev_power_get: unknown rsmi status 7")
 
-    def test_is_hytop_error(self):
-        from hytop.ffi.errors import HytopError
+    def test_is_dcutop_error(self):
+        from dcutop.ffi.errors import DcutopError
 
-        self.assertTrue(issubclass(RsmiCallError, HytopError))
+        self.assertTrue(issubclass(RsmiCallError, DcutopError))
 
 
 if __name__ == "__main__":

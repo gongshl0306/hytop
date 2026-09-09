@@ -1,9 +1,9 @@
 import unittest
 
-import hytop
-from hytop import Collector, Device, MockBackend, snapshot, use_mock
-from hytop.api import _shared_backend, shutdown
-from hytop.ffi.errors import DeviceNotFoundError
+import dcutop
+from dcutop import Collector, Device, MockBackend, snapshot, use_mock
+from dcutop.api import _shared_backend, shutdown
+from dcutop.ffi.errors import DeviceNotFoundError
 
 
 class ApiTestBase(unittest.TestCase):
@@ -19,11 +19,11 @@ class TestImportSurface(ApiTestBase):
         for name in ("Device", "HcuProcess", "snapshot", "use_mock",
                      "Collector", "SystemSnapshot", "NativeBackend",
                      "MockBackend", "__version__"):
-            self.assertTrue(hasattr(hytop, name), name)
+            self.assertTrue(hasattr(dcutop, name), name)
 
-    def test_import_hytop_does_not_load_driver(self):
+    def test_import_dcutop_does_not_load_driver(self):
         # importing on a machine without the driver must stay safe
-        import hytop as mod
+        import dcutop as mod
 
         self.assertIsInstance(mod.__version__, str)
 
@@ -69,7 +69,7 @@ class TestDevice(ApiTestBase):
         self.assertRegex(dev.memory_free_human(), r"^[\d.]+G$")
 
     def test_na_when_value_missing(self):
-        from hytop.models.device import DeviceMetrics
+        from dcutop.models.device import DeviceMetrics
 
         dev = Device(0)
         dev._backend = type("B", (), {
@@ -91,7 +91,7 @@ class TestDevice(ApiTestBase):
 
 class TestProcesses(ApiTestBase):
     def test_all_processes_wrapped(self):
-        from hytop.api import processes
+        from dcutop.api import processes
 
         procs = processes()
         self.assertEqual({p.pid for p in procs}, {10001, 10002, 10003})
@@ -106,7 +106,7 @@ class TestProcesses(ApiTestBase):
             self.assertIn(0, proc.devices)
 
     def test_usage_views_and_human_formatting(self):
-        from hytop.api import processes
+        from dcutop.api import processes
 
         proc = processes()[0]
         usage = proc.devices[0]
@@ -117,13 +117,13 @@ class TestProcesses(ApiTestBase):
         self.assertEqual(proc.vram_used_human(7), "N/A")  # not on device 7
 
     def test_cpu_percent_none_without_proc_entry(self):
-        from hytop.api import processes
+        from dcutop.api import processes
 
         for proc in processes():
             self.assertIsNone(proc.cpu_percent)
 
     def test_repr(self):
-        from hytop.api import processes
+        from dcutop.api import processes
 
         procs = processes()
         self.assertIn("pid=10001", repr(procs[0]))
@@ -143,7 +143,7 @@ class TestSnapshot(ApiTestBase):
 
 class TestSharedBackendLifecycle(ApiTestBase):
     def test_use_mock_switches_and_shuts_old(self):
-        import hytop.api as api_mod
+        import dcutop.api as api_mod
 
         old = api_mod._shared_backend
         use_mock(device_count=4)
@@ -151,7 +151,7 @@ class TestSharedBackendLifecycle(ApiTestBase):
         self.assertEqual(Device.count(), 4)
 
     def test_shutdown_resets_and_lazy_reinit(self):
-        import hytop.api as api_mod
+        import dcutop.api as api_mod
 
         shutdown()
         self.assertIsNone(api_mod._shared_backend)

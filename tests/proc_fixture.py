@@ -25,7 +25,7 @@ class ProcTree:
     """
 
     def __init__(self):
-        self.root = Path(tempfile.mkdtemp(prefix="hytop-fake-proc-")).resolve()
+        self.root = Path(tempfile.mkdtemp(prefix="dcutop-fake-proc-")).resolve()
 
     def _pid_dir(self, pid) -> Path:
         d = self.root / f"{int(pid):d}"  # int(): a pid can only be numeric

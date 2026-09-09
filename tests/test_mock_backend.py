@@ -1,9 +1,9 @@
 import time
 import unittest
 
-from hytop.backends.mock import MEMORY_TOTAL, MockBackend
-from hytop.ffi.errors import DeviceNotFoundError, MetricNotSupportedError
-from hytop.models.device import DeviceInfo
+from dcutop.backends.mock import MEMORY_TOTAL, MockBackend
+from dcutop.ffi.errors import DeviceNotFoundError, MetricNotSupportedError
+from dcutop.models.device import DeviceInfo
 
 
 class TestMockBackendBasics(unittest.TestCase):

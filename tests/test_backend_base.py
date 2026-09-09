@@ -1,7 +1,7 @@
 import unittest
 
-from hytop.backends.base import HCUBackend
-from hytop.backends.mock import MockBackend
+from dcutop.backends.base import HCUBackend
+from dcutop.backends.mock import MockBackend
 
 
 class IncompleteBackend(HCUBackend):

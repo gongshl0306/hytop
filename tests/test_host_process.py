@@ -2,9 +2,9 @@ import os
 import pwd
 import unittest
 
-from hytop.backends.mock import MockBackend
-from hytop.host.proc import ProcessSampler
-from hytop.host.process import attach_host_info
+from dcutop.backends.mock import MockBackend
+from dcutop.host.proc import ProcessSampler
+from dcutop.host.process import attach_host_info
 from tests.proc_fixture import ProcTree
 
 

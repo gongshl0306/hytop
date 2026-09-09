@@ -3,8 +3,8 @@ import threading
 import time
 import unittest
 
-from hytop.backends.mock import MockBackend
-from hytop.collector import Collector, _restrict_processes
+from dcutop.backends.mock import MockBackend
+from dcutop.collector import Collector, _restrict_processes
 
 
 def wait_for(predicate, timeout=5.0, step=0.01):

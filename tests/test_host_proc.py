@@ -2,7 +2,7 @@ import os
 import pwd
 import unittest
 
-from hytop.host.proc import (
+from dcutop.host.proc import (
     CLK_TCK,
     PAGE_SIZE,
     ProcessSampler,
@@ -97,7 +97,7 @@ class TestParsers(FakeProc):
         self.assertEqual(len(fields), 10)
 
     def test_parse_cpu_fields_rejects_non_cpu(self):
-        from hytop.host.proc import parse_cpu_fields
+        from dcutop.host.proc import parse_cpu_fields
 
         self.assertIsNone(parse_cpu_fields("cpuX 1 2 3"))
         self.assertIsNone(parse_cpu_fields("garbage"))
@@ -132,7 +132,7 @@ class TestCpuMath(unittest.TestCase):
 
     @staticmethod
     def fields(**kw):
-        from hytop.host.proc import CPU_FIELD_NAMES
+        from dcutop.host.proc import CPU_FIELD_NAMES
 
         base = {name: 0 for name in CPU_FIELD_NAMES}
         base.update(kw)
@@ -162,13 +162,13 @@ class TestCpuMath(unittest.TestCase):
 
 class TestCoreCount(FakeProc):
     def test_from_stat_fixture(self):
-        from hytop.host.proc import core_count
+        from dcutop.host.proc import core_count
 
         self.write_proc_stat(1000)  # one "cpu " aggregate + one "cpu0" line
         self.assertEqual(core_count(self.root), 1)
 
     def test_missing_stat_falls_back(self):
-        from hytop.host.proc import core_count
+        from dcutop.host.proc import core_count
         import os as _os
 
         self.assertEqual(core_count(self.root), _os.cpu_count() or 1)

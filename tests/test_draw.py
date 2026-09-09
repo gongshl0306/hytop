@@ -1,8 +1,8 @@
 import unittest
 
-from hytop.backends.mock import MockBackend
-from hytop.tui.app import _draw
-from hytop.tui.panels import TuiState
+from dcutop.backends.mock import MockBackend
+from dcutop.tui.app import _draw
+from dcutop.tui.panels import TuiState
 
 
 class FakeStdscr:
@@ -38,17 +38,17 @@ class TestDrawClipping(unittest.TestCase):
     def setUp(self):
         import io
 
-        from hytop.tui.app import run_tui
+        from dcutop.tui.app import run_tui
 
         out = io.StringIO()
         # warm nothing; we only need a snapshot to draw
         self.screen = FakeStdscr(rows=40, cols=80)
-        from hytop.collector import Collector
+        from dcutop.collector import Collector
 
         collector = Collector(MockBackend(), interval=0.05, window_ms=10)
         collector.start()
         try:
-            from hytop.tui.app import FIRST_SNAPSHOT_TIMEOUT
+            from dcutop.tui.app import FIRST_SNAPSHOT_TIMEOUT
             import time
 
             deadline = time.monotonic() + FIRST_SNAPSHOT_TIMEOUT

@@ -1,0 +1,74 @@
+"""Shared fixture: a fake procfs tree for host-layer tests."""
+
+import shutil
+import tempfile
+from pathlib import Path
+
+
+def stat_line(pid, comm, state="S", utime=0, stime=0, rss_pages=100, nthreads=1):
+    # after "pid (comm) ", rest[0]=field3(state), rest[11]=utime(f14),
+    # rest[12]=stime(f15), rest[17]=num_threads(f20), rest[21]=rss(f24)
+    rest = ["0"] * 50
+    rest[0] = state
+    rest[11] = str(utime)
+    rest[12] = str(stime)
+    rest[17] = str(nthreads)
+    rest[21] = str(rss_pages)
+    return f"{int(pid)} ({comm}) " + " ".join(rest)
+
+
+class ProcTree:
+    """Fake /proc with process dirs, aggregate stat and meminfo.
+
+    Per-PID directory names are built from ``int(pid)`` — only a bare
+    number survives — and every path stays inside the fixture root.
+    """
+
+    def __init__(self):
+        self.root = Path(tempfile.mkdtemp(prefix="hytop-fake-proc-")).resolve()
+
+    def _pid_dir(self, pid) -> Path:
+        d = self.root / f"{int(pid):d}"  # int(): a pid can only be numeric
+        real = d.resolve()
+        if not str(real).startswith(str(self.root) + "/"):
+            raise ValueError(f"path escapes fixture root: {real}")
+        return d
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        shutil.rmtree(self.root, ignore_errors=True)
+
+    def make_process(self, pid, comm="python3", cmdline=("python3", "train.py"),
+                     utime=10, stime=5, rss_pages=1000, state="S"):
+        d = self._pid_dir(pid)
+        d.mkdir(parents=True)
+        self.rewrite_stat(pid, comm=comm, state=state, utime=utime,
+                          stime=stime, rss_pages=rss_pages)
+        if cmdline is not None:
+            raw = b"\0".join(part.encode() for part in cmdline) + b"\0"
+        else:  # kernel thread: empty cmdline file
+            raw = b""
+        (d / "cmdline").write_bytes(raw)
+
+    def rewrite_stat(self, pid, comm="python3", state="S", utime=0, stime=0,
+                     rss_pages=1000, nthreads=1):
+        (self._pid_dir(pid) / "stat").write_text(
+            stat_line(pid, comm, state=state, utime=utime, stime=stime,
+                      rss_pages=rss_pages, nthreads=nthreads))
+
+    def remove_process(self, pid):
+        shutil.rmtree(self._pid_dir(pid))
+
+    def write_proc_stat(self, total_ticks):
+        (self.root / "stat").write_text(
+            f"cpu  {total_ticks} 0 0 0 0 0 0 0 0 0\n"
+            "cpu0 500 0 0 0 0 0 0 0 0 0\n")
+
+    def write_meminfo(self, total_kib=1_000_000, avail_kib=250_000):
+        (self.root / "meminfo").write_text(
+            f"MemTotal:       {total_kib} kB\n"
+            f"MemFree:        {avail_kib // 2} kB\n"
+            f"MemAvailable:   {avail_kib} kB\n"
+            "SwapTotal:      0 kB\n")

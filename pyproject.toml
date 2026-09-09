@@ -3,13 +3,13 @@ requires = ["setuptools>=61"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "hytop"
-version = "0.6.0"
+name = "dcutop"
+version = "0.7.0"
 description = "nvitop-style terminal monitor for Hygon DCU (HCU) accelerators - zero-dependency, read-only, with live utilization charts and JSON output"
 readme = "README.md"
 requires-python = ">=3.7"
 license = { text = "MIT" }
-authors = [{ name = "hytop contributors" }]
+authors = [{ name = "dcutop contributors" }]
 keywords = ["hygon", "dcu", "hcu", "monitor", "tui", "nvitop", "rocm-smi", "gpu"]
 classifiers = [
     "Environment :: Console",
@@ -22,7 +22,7 @@ classifiers = [
 dependencies = []
 
 [project.scripts]
-hytop = "hytop.cli:main"
+dcutop = "dcutop.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

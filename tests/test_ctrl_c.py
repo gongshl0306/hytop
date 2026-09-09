@@ -2,10 +2,10 @@ import io
 import unittest
 from unittest import mock
 
-from hytop.backends.mock import MockBackend
-from hytop.cli import main
-from hytop.tui.app import _curses_main
-from hytop.tui.panels import TuiState
+from dcutop.backends.mock import MockBackend
+from dcutop.cli import main
+from dcutop.tui.app import _curses_main
+from dcutop.tui.panels import TuiState
 
 
 class FakeScreen:
@@ -31,7 +31,7 @@ class FakeCollector:
 class TestCtrlC(unittest.TestCase):
     def test_curses_loop_returns_cleanly_on_interrupt(self):
         with mock.patch("curses.curs_set"), \
-                mock.patch("hytop.tui.app.build_attrs", return_value={}):
+                mock.patch("dcutop.tui.app.build_attrs", return_value={}):
             screen = FakeScreen()
             collector = FakeCollector()
             # must not raise; returns like the 'q' path
@@ -46,7 +46,7 @@ class TestCtrlC(unittest.TestCase):
             return backend
 
         out, err = io.StringIO(), io.StringIO()
-        with mock.patch("hytop.tui.app.run_tui", side_effect=KeyboardInterrupt):
+        with mock.patch("dcutop.tui.app.run_tui", side_effect=KeyboardInterrupt):
             code = main(["--backend", "mock"], backend_factory=factory,
                         stdout=out, stderr=err)
         self.assertEqual(code, 130)
@@ -55,7 +55,7 @@ class TestCtrlC(unittest.TestCase):
 
     def test_normal_quit_still_exit_zero(self):
         out = io.StringIO()
-        with mock.patch("hytop.tui.app.run_tui", return_value=None):
+        with mock.patch("dcutop.tui.app.run_tui", return_value=None):
             code = main(["--backend", "mock"], backend_factory=lambda n: MockBackend(),
                         stdout=out, stderr=io.StringIO())
         self.assertEqual(code, 0)

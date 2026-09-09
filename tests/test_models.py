@@ -1,7 +1,7 @@
 import dataclasses
 import unittest
 
-from hytop.models import (
+from dcutop.models import (
     DeviceInfo,
     DeviceMetrics,
     HcuProcessInfo,

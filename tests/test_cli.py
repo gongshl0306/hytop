@@ -2,9 +2,9 @@ import contextlib
 import io
 import unittest
 
-import hytop
-from hytop.cli import main, parse_device_list
-from hytop.ffi.errors import DriverNotFoundError
+import dcutop
+from dcutop.cli import main, parse_device_list
+from dcutop.ffi.errors import DriverNotFoundError
 
 
 def run_main(argv):
@@ -42,7 +42,7 @@ class TestOnceOutput(unittest.TestCase):
     def test_mock_once_table(self):
         code, out, err = run_main(["--once", "--backend", "mock", "--window-ms", "10"])
         self.assertEqual(code, 0)
-        self.assertIn(f"hytop {hytop.__version__}", out)
+        self.assertIn(f"dcutop {dcutop.__version__}", out)
         self.assertIn("HCU", out)
         self.assertIn("Model", out)
         rows = [line for line in out.splitlines() if "MOCK DCU-1" in line]
@@ -74,13 +74,13 @@ class TestCliErrors(unittest.TestCase):
         def failing_factory(name):
             raise DriverNotFoundError(
                 "HCU driver libraries not found.\nSearched:\n"
-                "  /opt/hyhal/lib/librocm_smi64.so\nCheck:\n  set HYTOP_LIBRARY_PATH"
+                "  /opt/hyhal/lib/librocm_smi64.so\nCheck:\n  set DCUTOP_LIBRARY_PATH"
             )
 
         out, err = io.StringIO(), io.StringIO()
         code = main(["--once"], backend_factory=failing_factory, stdout=out, stderr=err)
         self.assertEqual(code, 2)
-        self.assertIn("HYTOP_LIBRARY_PATH", err.getvalue())
+        self.assertIn("DCUTOP_LIBRARY_PATH", err.getvalue())
         self.assertIn("/opt/hyhal/lib/librocm_smi64.so", err.getvalue())
 
     def test_invalid_device_list(self):
@@ -105,7 +105,7 @@ class TestCliErrors(unittest.TestCase):
         )
         self.assertEqual(code, 0)
         payload = json_module.loads(out)
-        self.assertEqual(payload["hytop_version"], hytop.__version__)
+        self.assertEqual(payload["dcutop_version"], dcutop.__version__)
         self.assertIn("timestamp", payload)
         self.assertEqual(len(payload["devices"]), 8)
         dev = payload["devices"][0]
@@ -131,7 +131,7 @@ class TestCliErrors(unittest.TestCase):
             with self.assertRaises(SystemExit) as ctx:
                 main(["--version"], stdout=io.StringIO(), stderr=io.StringIO())
         self.assertEqual(ctx.exception.code, 0)
-        self.assertIn(hytop.__version__, out.getvalue())
+        self.assertIn(dcutop.__version__, out.getvalue())
 
 
 if __name__ == "__main__":

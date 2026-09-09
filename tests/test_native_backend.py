@@ -1,8 +1,8 @@
 import unittest
 
-from hytop.backends.native import NativeBackend
-from hytop.ffi.errors import DeviceNotFoundError, DriverInitError, RsmiCallError
-from hytop.models.device import DeviceInfo
+from dcutop.backends.native import NativeBackend
+from dcutop.ffi.errors import DeviceNotFoundError, DriverInitError, RsmiCallError
+from dcutop.models.device import DeviceInfo
 
 REAL_TOTAL = 154602045440  # bytes, from the target machine
 

@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# dcutop launcher: run from a checkout or an /opt install without installing
+# any Python deps. Resolves symlinks so a /usr/local/bin/dcutop link works.
+SOURCE="${BASH_SOURCE[0]}"
+DIR="$(cd "$(dirname "$(readlink -f "$SOURCE")")/.." && pwd)"
+PYTHONPATH="$DIR/src${PYTHONPATH:+:$PYTHONPATH}" exec python3 -m dcutop "$@"

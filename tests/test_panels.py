@@ -1,13 +1,13 @@
 import curses
 import unittest
 
-import hytop
-from hytop.models.device import DeviceInfo, DeviceMetrics, TemperatureInfo
-from hytop.models.history import DeviceHistory
-from hytop.models.process import HcuProcessInfo, ProcessDeviceUsage
-from hytop.models.snapshot import SystemSnapshot
-from hytop.tui.braille import avg_series, axis_line, braille_chart
-from hytop.tui.panels import (
+import dcutop
+from dcutop.models.device import DeviceInfo, DeviceMetrics, TemperatureInfo
+from dcutop.models.history import DeviceHistory
+from dcutop.models.process import HcuProcessInfo, ProcessDeviceUsage
+from dcutop.models.snapshot import SystemSnapshot
+from dcutop.tui.braille import avg_series, axis_line, braille_chart
+from dcutop.tui.panels import (
     DeviceLayout,
     TuiState,
     device_lines,
@@ -16,7 +16,7 @@ from hytop.tui.panels import (
     render_frame,
     text_of,
 )
-from hytop.tui.theme import bar_style, power_style, temp_style, util_style
+from dcutop.tui.theme import bar_style, power_style, temp_style, util_style
 
 GIB = 1024**3
 
@@ -195,7 +195,7 @@ class TestBraille(unittest.TestCase):
 
 class TestChartSection(unittest.TestCase):
     def test_charts_present_with_cyan_yellow_styles(self):
-        from hytop.tui.panels import chart_lines
+        from dcutop.tui.panels import chart_lines
 
         snapshot = make_snapshot(with_history=True)
         lines = chart_lines(snapshot, width=120, interval_s=1.0)
@@ -207,7 +207,7 @@ class TestChartSection(unittest.TestCase):
         self.assertIn("yellow", styles)
 
     def test_host_and_gpu_charts_side_by_side(self):
-        from hytop.tui.panels import chart_lines
+        from dcutop.tui.panels import chart_lines
 
         snapshot = make_snapshot(with_history=True)
         snapshot.host_history.append(37.3, 77.2)
@@ -227,7 +227,7 @@ class TestChartSection(unittest.TestCase):
                          styles)
 
     def test_mem_chart_normalizes_by_total(self):
-        from hytop.tui.panels import chart_lines
+        from dcutop.tui.panels import chart_lines
 
         snapshot = make_snapshot(with_history=True)  # 50% / 80% of 10GiB
         lines = chart_lines(snapshot, width=120, interval_s=1.0)
@@ -271,7 +271,7 @@ class TestRenderFrame(unittest.TestCase):
     def test_full_frame_sections(self):
         frame = line_texts(render_frame(make_snapshot(with_history=True), TuiState()))
         joined = "\n".join(frame)
-        self.assertIn(f"hytop {hytop.__version__}", joined)
+        self.assertIn(f"dcutop {dcutop.__version__}", joined)
         self.assertIn("devices: 2", joined)
         self.assertIn("┌─ Devices ─", joined)
         self.assertIn("┌─ Utilization ─", joined)
@@ -310,7 +310,7 @@ class TestRenderFrame(unittest.TestCase):
 
     def test_title_is_bold(self):
         frame = render_frame(make_snapshot(), TuiState())
-        title_lines = [line for line in frame if f"hytop {hytop.__version__}" in text_of(line)]
+        title_lines = [line for line in frame if f"dcutop {dcutop.__version__}" in text_of(line)]
         self.assertEqual(len(title_lines), 1)
         self.assertIn("bold", [s for _, s in title_lines[0]])
 
