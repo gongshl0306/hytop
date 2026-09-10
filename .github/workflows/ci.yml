@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.7", "3.8", "3.9", "3.10", "3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Unit tests (mock backend, no hardware needed)
+        run: PYTHONPATH=src python3 -m unittest discover
+      - name: CLI smoke (mock backend)
+        run: |
+          PYTHONPATH=src python3 -m dcutop --backend mock --once --window-ms 10 | head -5
+          PYTHONPATH=src python3 -m dcutop --backend mock --json --window-ms 10 | python3 -c "import json, sys; d = json.load(sys.stdin); assert d['devices']"
+
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build sdist and wheel
+        run: |
+          python3 -m pip install --upgrade build
+          python3 -m build
+      - name: Install wheel into a fresh venv and smoke test
+        run: |
+          python3 -m venv testenv
+          testenv/bin/pip install dist/*.whl
+          testenv/bin/dcutop --version
+          testenv/bin/dcutop --backend mock --once --window-ms 10 > /dev/null
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/

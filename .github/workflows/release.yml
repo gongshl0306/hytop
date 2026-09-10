@@ -1,0 +1,30 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build sdist and wheel
+        run: |
+          python3 -m pip install --upgrade build
+          python3 -m build
+      - name: Use the annotated tag message as release body
+        run: git tag -l --format='%(contents)' "${{ github.ref_name }}" > release-body.md
+      - name: Create GitHub release
+        uses: softprops/action-ghrelease@v2
+        with:
+          name: dcutop ${{ github.ref_name }}
+          body_path: release-body.md
+          files: dist/*
+          generate_release_notes: true
