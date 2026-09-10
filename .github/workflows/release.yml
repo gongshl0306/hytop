@@ -15,6 +15,13 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Verify tag matches package version
+        run: |
+          PKG_VERSION=$(PYTHONPATH=src python3 -c "import dcutop; print(dcutop.__version__)")
+          if [ "v${PKG_VERSION}" != "${{ github.ref_name }}" ]; then
+            echo "::error::tag ${{ github.ref_name }} does not match package version ${PKG_VERSION}"
+            exit 1
+          fi
       - name: Build sdist and wheel
         run: |
           python3 -m pip install --upgrade build
